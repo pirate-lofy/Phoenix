@@ -34,11 +34,78 @@ class CarlaEnv:
         
     def reset(self):
         self._start_new_episod()
+        data,measures=self._get_data(reset=True)
+        return data,measures
+    
+    def step(self,actions):
+        steer=np.clip(actions[0],-1,1)
+        throttle=np.clip(actions[1],0,1)
+        brake=round(actions[2])
+        
+        self.client.send_control(
+                steer=steer,
+                throttle=throttle,
+                brake=brake,
+                hand_brake=False,
+                reverse=False                
+                )
+        # speed,dist_to_goal,colls,inters
+        data,measures=self._get_data()
+        
+        reward=self._compute_reward(measures)
+        done=self._is_done(measures)
+        return (data,measures),reward,done,{}
+    
+    def _is_done(self,measures):
+        dist=measures[1]
+        colls=measures[2]
+        return self._is_goal(dist) and self._did_collide(colls)
+    
+    #TODO: should be revised
+    def _compute_reward(self,measures):
+        speed=measures[0]
+        dist=measures[1]
+        colls=measures[2]
+        inters=measures[3]
+        
+        alpha=0.1 # should be revised
+        
+        if self._is_goal(dist):
+            return 1000
+        if self._did_collide(colls):
+            return -1000
+        r=alpha*(speed+dist-inters)
+        return r
+        
+    
+    def _is_goal(dist):
+        return dist<2.0
+    
+    def _did_collide(colls):
+        return colls>0
+    
+    def _get_data(self,reset=False):
         measures,data=self.client.read_data()
+        
+        if reset:
+            self.start_time=measures.game_timestamp
+        
         data=self._data_preprocessing(data)
-        measures=self._measures_preprocessing(measures) 
+        state,colls,inters=self._measures_preprocessing(measures) 
+        measures=self._make_measures_blob(state,colls,inters)
+    
+        return data,measures
+    
+    def _make_measures_blob(self,state,colls,inters):
+        pos=np.array(state[0:2])
+        dist_to_goal=np.linal.norm(pos-self.goal)
         
+        speed=state[2]
+        colls=sum(colls)
+        inters=sum(inters)
         
+        return np.array([speed,dist_to_goal,colls,inters])
+    
     def _measures_preprocessing(self,measures):
         PM = measures.player_measurements
 
@@ -53,7 +120,7 @@ class CarlaEnv:
         other_lane = PM.intersection_otherlane
         offroad = PM.intersection_offroad
     
-        return np.array([pos_x, pos_y, speed]), np.array([col_cars, col_ped, col_other]), np.array([other_lane, offroad])
+        return [pos_x, pos_y, speed], [col_cars, col_ped, col_other], [other_lane, offroad]
     
     def _data_preprocessing(self,data):
         ready_data=[]
