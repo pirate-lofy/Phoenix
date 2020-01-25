@@ -2,30 +2,33 @@ from carla.client import CarlaClient
 from carla.settings import CarlaSettings
 from carla.sensor import Camera
 from carla.tcp import TCPConnectionError
-from carla.image_converter import to_rgb_array,labels_to_cityscapes_palette
+from carla.image_converter import labels_to_cityscapes_palette
 
 import random
 import cv2 as cv
 import numpy as np
 
 class CarlaEnv:
-    n_vehicles=60
-    n_peds=10
-    n_actions=3
+    n_vehicles=0
+    n_peds=0
+    n_actions=3 # TODO: need to convert to continues action space
     
     observation_shape=(600,800,3)
     callibaration_shape=(84,84)
     
+    # _is_quiet function stuff
     speed_list=[]
     speed_list_limit=10
     wait=15
     
+    # we get all kinds of cameras and choose between them later
+    #key: the name of the camera
+    #value: the post processing paramerter to function Camera
     cameras={'rgb':'SceneFinal',
              'seg':'SemanticSegmentation',
              'depth':'Depth'}
     
     def __init__(self,host='localhost',port=2000):
-        
         self.client=CarlaClient(host,port)
         self.settings=self._get_settings(
                 self.n_vehicles,self.n_peds)
@@ -38,7 +41,13 @@ class CarlaEnv:
         
     def reset(self):
         self._start_new_episod()
+        
+        # just to wait until the car falls from the sky and
+        # becomes ready 
+        # may prevent the collision sensor from recording 
+        # falling as collision
         self._empty_cycle()
+        
         data,measures=self._get_data(reset=True)
         return data,measures
     
@@ -47,6 +56,9 @@ class CarlaEnv:
         throttle=np.clip(actions[1],0,1)
         brake=round(actions[2])
         
+        # remember: Carla needs to get_data once and followed
+        # by send_control
+        # getting data twice in row causes craching
         self.client.send_control(
                 steer=steer,
                 throttle=throttle,
@@ -54,6 +66,7 @@ class CarlaEnv:
                 hand_brake=False,
                 reverse=False                
                 )
+        
         # speed,dist_to_goal,colls,inters
         data,measures=self._get_data()
         
@@ -81,6 +94,14 @@ class CarlaEnv:
                 
     
     def _is_bad_pos(self,measures):
+        '''
+        checks if the car has collided with any thing or
+        crossed the sidewalk or it has been stand still for too long
+        
+        :parm measures: all measurments came from _make_measures_blob function
+        :return: boolean value
+        
+        '''
         colls=measures[2]
         inters=measures[3]
         return self._did_collide(colls) or self._sidewalk(inters)\
@@ -88,6 +109,17 @@ class CarlaEnv:
 
                 
     def _is_quiet(self):
+        '''
+        checks if the car has been stand still for too long
+        by storing speed in a list and computing a the sum of all 
+        the values in that list, if the sum is zero then the car 
+        was stopping.
+        checks every frame and save values of speed for only
+        number of frames equals to speed_list_limit.
+        
+        :return: boolean value
+        
+        '''
         if len(self.speed_list)>self.speed_list_limit:
             self.speed_list=self.speed_list[1:self.speed_list_limit+1]
         return sum(self.speed_list)==0
@@ -96,7 +128,6 @@ class CarlaEnv:
     def _compute_reward(self,measures):
         speed=measures[0]
         dist=measures[1]
-        colls=measures[2]
         inters=measures[3]
         
         alpha=0.1 # should be revised
@@ -120,6 +151,7 @@ class CarlaEnv:
     def _get_data(self,reset=False):
         measures,data=self.client.read_data()
         
+        # dave it just in case!
         if reset:
             self.start_time=measures.game_timestamp
         
@@ -145,6 +177,7 @@ class CarlaEnv:
         pos_x = PM.transform.location.x / 100 # cm -> m
         pos_y = PM.transform.location.y / 100
         
+        # to prevent negative values
         speed = PM.forward_speed/10.0 if PM.forward_speed>=0 else 0.0001
         self.speed_list.append(speed)
         
@@ -164,7 +197,11 @@ class CarlaEnv:
             
             if key=='seg':
                 img_data=labels_to_cityscapes_palette(img)
+            # depth camera produces gray scale image
             if not key=='depth':
+                # astype('float32') is needed as attribute data
+                # returns data in float64 format which generates
+                # error with opencv
                 img_data=cv.cvtColor(img_data.astype('float32'),cv.COLOR_BGR2GRAY)
             
             img_data=np.resize(img_data,self.callibaration_shape)/255.0
@@ -175,10 +212,20 @@ class CarlaEnv:
         return np.stack(ready_data,axis=2)
         
     def _start_new_episod(self):
+        '''
+        chooses a random position for the car to start from 
+        and chooses another random position to be considered 
+        as the destination of the navigation... this method 
+        is needed to calculate the dist_to_goal value which
+        is used as parameter feeded to the model later
+        
+        '''
         n_spots=len(self.scene.player_start_spots)
         start_point=random.randint(0,max(0,n_spots-1))
         goal_point=random.randint(0,max(0,n_spots-1))
         
+        # try to find another position which is not the same 
+        # as the starting position
         while start_point==goal_point:
             goal_point=random.randint(0,max(0,n_spots-1))
         
