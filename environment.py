@@ -167,7 +167,7 @@ class CarlaEnv:
             if not key=='depth':
                 img_data=cv.cvtColor(img_data.astype('float32'),cv.COLOR_BGR2GRAY)
             
-#            img_data=np.resize(img_data,self.callibaration_shape)/255.0
+            img_data=np.resize(img_data,self.callibaration_shape)/255.0
             ready_data.append(img_data)
         
         # TODO: check the stack technique to get 
