@@ -4,22 +4,26 @@ from carla.sensor import Camera
 from carla.tcp import TCPConnectionError
 from carla.image_converter import labels_to_cityscapes_palette
 
+from gym import spaces
+
 import random
 import cv2 as cv
 import numpy as np
 
+
 class CarlaEnv:
-    n_vehicles=0
-    n_peds=0
+    n_vehicles=40
+    n_peds=30
     n_actions=3 # TODO: need to convert to continues action space
     
-    observation_shape=(600,800,3)
     callibaration_shape=(84,84)
+    callibarationRGB_shape=(84,84,3)
     
     # _is_quiet function stuff
     speed_list=[]
     speed_list_limit=10
     wait=15
+    num_envs=1
     
     # we get all kinds of cameras and choose between them later
     #key: the name of the camera
@@ -29,15 +33,31 @@ class CarlaEnv:
              'depth':'Depth'}
     
     def __init__(self,host='localhost',port=2000):
-        self.client=CarlaClient(host,port)
+        self.observation_space = spaces.Tuple(
+            (spaces.Box(0, 255, self.callibarationRGB_shape), 
+            spaces.Box(-np.inf, np.inf, (4,))
+            )
+        )
+        self.action_space = spaces.Box(-1, 1, shape=(
+                self.n_actions,))
+        
         self.settings=self._get_settings(
                 self.n_vehicles,self.n_peds)
         self._add_cameras()
-    
-    def start(self):
-        self.client.connect()
-        print('CarlaEnv log: client connected successfully.')
+        
+        self._connect(host,port)
         self.scene=self.client.load_settings(self.settings)
+    
+    def _connect(self,host,port):
+        while True:
+            try:
+                self.client = CarlaClient(host, port)
+                self.client.connect()
+                print('CarlaEnv log: client connected successfully.')
+                break
+            except TCPConnectionError:
+                print('''CarlaEnv log: Client can not connect to the server..\n
+                      Server may not launched yet...''')
         
     def reset(self):
         self._start_new_episod()
@@ -52,6 +72,7 @@ class CarlaEnv:
         return data,measures
     
     def step(self,actions):
+        actions=actions[0]
         steer=np.clip(actions[0],-1,1)
         throttle=np.clip(actions[1],0,1)
         brake=round(actions[2])
@@ -72,7 +93,7 @@ class CarlaEnv:
         
         reward=self._compute_reward(measures)
         done=self._is_done(measures)
-        return (data,measures),reward,done,{}
+        return data,measures,reward,done,{}
     
     
     def _empty_cycle(self):
@@ -171,6 +192,7 @@ class CarlaEnv:
         
         return np.array([speed,dist_to_goal,colls,inters])
     
+    # TODO: need to reconsider the measures we need
     def _measures_preprocessing(self,measures):
         PM = measures.player_measurements
 
@@ -254,8 +276,8 @@ class CarlaEnv:
         for name,postproc in self.cameras.items():
             cam=Camera(name,PostProcessing=postproc)
             cam.set(FOV=90.0)
-            cam.set_image_size(self.observation_shape[1],
-                               self.observation_shape[0])
+            cam.set_image_size(self.observation_space[1],
+                               self.observation_space[0])
             cam.set_position(x=0.30, y=0, z=1.30)
             cam.set_rotation(pitch=0, yaw=0, roll=0)
             self.settings.add_sensor(cam)
