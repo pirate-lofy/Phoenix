@@ -106,6 +106,7 @@ class LstmPolicy(object):
 class CnnPolicy(object):
 
     def __init__(self, sess, ob_img_space, ob_measure_space, frame_stack, ac_space, nbatch, nsteps, reuse=False): #pylint: disable=W0613
+        # delete nbatches=n_envs from image_shape and replace it with 1 in meausres_shape
         nh, nw, nc = ob_img_space.shape
         ob_img_shape = (nbatch, nh, nw, nc * frame_stack)
         nm = (nbatch, ob_measure_space.shape[0]) # num measurements

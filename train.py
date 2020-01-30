@@ -8,7 +8,7 @@ def train(num_timesteps, seed, nenvs):
     import tensorflow as tf
     from stable_baselines.common.vec_env.dummy_vec_env import DummyVecEnv
     from environment import CarlaEnv
-    ncpu = 1
+    ncpu = 4
     config = tf.ConfigProto(allow_soft_placement=True,
                             intra_op_parallelism_threads=ncpu,
                             inter_op_parallelism_threads=ncpu)
@@ -25,7 +25,7 @@ def train(num_timesteps, seed, nenvs):
     env=CarlaEnv()
     set_global_seeds(seed)
     policy = CnnPolicy
-    ppo2.learn(policy=policy, env=env, nsteps=32, nminibatches=32,
+    ppo2.learn(policy=policy, env=env, nsteps=8, nminibatches=8,
         lam=0.95, gamma=0.99, noptepochs=10, log_interval=1,
         ent_coef=0.0,
         lr=3e-4,

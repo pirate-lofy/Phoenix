@@ -75,18 +75,27 @@ class CarlaEnv:
         actions=actions[0]
         steer=np.clip(actions[0],-1,1)
         throttle=np.clip(actions[1],0,1)
-        brake=round(actions[2])
-        
+        brake=np.clip(actions[2],0,1)
+#        print(steer,throttle,brake)
         # remember: Carla needs to get_data once and followed
         # by send_control
         # getting data twice in row causes craching
+        for _ in range(5):
+            self.client.send_control(
+                    steer=steer,
+                    throttle=throttle,
+                    brake=brake,
+                    hand_brake=False,
+                    reverse=False                
+                    )
+            data,measures=self._get_data()
         self.client.send_control(
-                steer=steer,
-                throttle=throttle,
-                brake=brake,
-                hand_brake=False,
-                reverse=False                
-                )
+                    steer=steer,
+                    throttle=throttle,
+                    brake=brake,
+                    hand_brake=False,
+                    reverse=False                
+                    )
         
         # speed,dist_to_goal,colls,inters
         data,measures=self._get_data()
@@ -111,7 +120,9 @@ class CarlaEnv:
     
     def _is_done(self,measures):
         dist=measures[1]
-        return self._is_goal(dist) or self._is_bad_pos(measures)
+        goal=self._is_goal(dist)
+        bad=self._is_bad_pos(measures)
+        return np.array([goal or bad])
                 
     
     def _is_bad_pos(self,measures):
@@ -157,14 +168,14 @@ class CarlaEnv:
             return 1000
         if self._is_bad_pos(measures):
             return -1000
-        r=alpha*(speed+dist-inters)
+        r=alpha*speed*(dist-inters)
         return r
         
     def _sidewalk(self,inters):
         return inters>0.3
     
     def _is_goal(self,dist):
-        return dist<2.0
+        return dist<0.1
     
     def _did_collide(self,colls):
         return colls>0

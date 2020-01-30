@@ -95,9 +95,11 @@ class Runner(object):
         obs_image_shape = tuple(obs_image_shape)
         self.obs_img = np.zeros((nenv,) + obs_image_shape, dtype=model.train_model.X.dtype.name)
         self.obs_measure = np.zeros((nenv,) + env.observation_space.spaces[1].shape, dtype=model.train_model.X_measurements.dtype.name)
+        
         obs_img, obs_measure = env.reset()
         self.update_obs_image(obs_img, None)
         self.obs_measure[:] = obs_measure
+        print(self.obs_img.shape,self.obs_measure.shape)
         self.gamma = gamma
         self.lam = lam
         self.nsteps = nsteps
@@ -126,15 +128,22 @@ class Runner(object):
             mb_neglogpacs.append(neglogpacs)
             mb_dones.append(self.dones)
             obs_img, obs_measure, rewards, self.dones, infos = self.env.step(actions)
+            
             self.update_obs_image(obs_img, self.dones)
             self.obs_measure[:] = obs_measure
             for info in infos:
                 maybeepinfo = info.get('episode')
                 if maybeepinfo: epinfos.append(maybeepinfo)
             mb_rewards.append(rewards)
+            
+
+            for done in self.dones:
+                if done:
+                    self.env.reset()
         #batch of steps to batch of rollouts
         mb_img_obs = np.asarray(mb_img_obs, dtype=self.obs_img.dtype)
         mb_measure_obs = np.asarray(mb_measure_obs, dtype=self.obs_measure.dtype)
+        print(len(mb_rewards),mb_rewards)
         mb_rewards = np.asarray(mb_rewards, dtype=np.float32)
         mb_actions = np.asarray(mb_actions)
         mb_values = np.asarray(mb_values, dtype=np.float32)
@@ -178,6 +187,7 @@ def learn(*, policy, env, nsteps, total_timesteps, ent_coef, lr,
             log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2,
             save_interval=0):
 
+
     if isinstance(lr, float): lr = constfn(lr)
     else: assert callable(lr)
     if isinstance(cliprange, float): cliprange = constfn(cliprange)
@@ -207,6 +217,7 @@ def learn(*, policy, env, nsteps, total_timesteps, ent_coef, lr,
 
     nupdates = total_timesteps//nbatch
     for update in range(1, nupdates+1):
+        print('update no.', update)
         assert nbatch % nminibatches == 0
         nbatch_train = nbatch // nminibatches
         tstart = time.time()
@@ -217,6 +228,7 @@ def learn(*, policy, env, nsteps, total_timesteps, ent_coef, lr,
         epinfobuf.extend(epinfos)
         mblossvals = []
         if states is None: # nonrecurrent version
+            print('nonrecurrent')
             inds = np.arange(nbatch)
             for _ in range(noptepochs):
                 np.random.shuffle(inds)
@@ -225,21 +237,22 @@ def learn(*, policy, env, nsteps, total_timesteps, ent_coef, lr,
                     mbinds = inds[start:end]
                     slices = (arr[mbinds] for arr in (img_obs, measure_obs, returns, masks, actions, values, neglogpacs))
                     mblossvals.append(model.train(lrnow, cliprangenow, *slices))
-        else: # recurrent version
-            assert nenvs % nminibatches == 0
-            envsperbatch = nenvs // nminibatches
-            envinds = np.arange(nenvs)
-            flatinds = np.arange(nenvs * nsteps).reshape(nenvs, nsteps)
-            envsperbatch = nbatch_train // nsteps
-            for _ in range(noptepochs):
-                np.random.shuffle(envinds)
-                for start in range(0, nenvs, envsperbatch):
-                    end = start + envsperbatch
-                    mbenvinds = envinds[start:end]
-                    mbflatinds = flatinds[mbenvinds].ravel()
-                    slices = (arr[mbflatinds] for arr in (img_obs, measure_obs, returns, masks, actions, values, neglogpacs))
-                    mbstates = states[mbenvinds]
-                    mblossvals.append(model.train(lrnow, cliprangenow, *slices, mbstates))
+#        else: # recurrent version
+#            print('recurrent')
+#            assert nenvs % nminibatches == 0
+#            envsperbatch = nenvs // nminibatches
+#            envinds = np.arange(nenvs)
+#            flatinds = np.arange(nenvs * nsteps).reshape(nenvs, nsteps)
+#            envsperbatch = nbatch_train // nsteps
+#            for _ in range(noptepochs):
+#                np.random.shuffle(envinds)
+#                for start in range(0, nenvs, envsperbatch):
+#                    end = start + envsperbatch
+#                    mbenvinds = envinds[start:end]
+#                    mbflatinds = flatinds[mbenvinds].ravel()
+#                    slices = (arr[mbflatinds] for arr in (img_obs, measure_obs, returns, masks, actions, values, neglogpacs))
+#                    mbstates = states[mbenvinds]
+#                    mblossvals.append(model.train(lrnow, cliprangenow, *slices, mbstates))
 
         lossvals = np.mean(mblossvals, axis=0)
         tnow = time.time()
