@@ -34,13 +34,13 @@ def main():
     
     '''learn parameters'''
     n_envs = 1 # n_batch_actor
-    n_steps=32
-    n_min_patches=32
+    n_steps=8
+    n_min_patches=8
     n_batch = n_envs * n_steps
     n_batch_critic = n_batch // n_min_patches #'''model parameter too'''
     
-    '''numbers parameters'''
-    ent_coef=0.0
+    '''numbers parameters according to the papper'''
+    ent_coef=0.01
     vf_coef=0.5
     max_grad_norm=0.5
     frame_stack=2
@@ -50,8 +50,8 @@ def main():
     n_opt_epochs=4
     save_each=20
     log_interval=10
-    lr=3e-4
-    clip_range=0.2
+    lr=0.0003
+    clip_range=0.1
     
     if isinstance(lr, float): lr = constfn(lr)
     else: assert callable(lr)

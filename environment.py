@@ -76,11 +76,11 @@ class CarlaEnv:
         steer=np.clip(actions[0],-1,1)
         throttle=np.clip(actions[1],0,1)
         brake=np.clip(actions[2],0,1)
-#        print(steer,throttle,brake)
+
         # remember: Carla needs to get_data once and followed
         # by send_control
         # getting data twice in row causes craching
-        for _ in range(5):
+        for _ in range(3):
             self.client.send_control(
                     steer=steer,
                     throttle=throttle,

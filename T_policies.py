@@ -1,23 +1,13 @@
 import numpy as np
 import tensorflow as tf
-from stable_baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm
+from stable_baselines.a2c.utils import fc
 from stable_baselines.common.distributions import make_proba_dist_type
-
-def nature_cnn(unscaled_images):
-    """
-    CNN from Nature paper.
-    """
-    scaled_images = tf.cast(unscaled_images, tf.float32)
-    activ = tf.nn.relu
-    h = activ(conv(scaled_images, 'c1', n_filters=32, filter_size=8, stride=4, init_scale=np.sqrt(2)))
-    h2 = activ(conv(h, 'c2', n_filters=64, filter_size=4, stride=2, init_scale=np.sqrt(2)))
-    h3 = activ(conv(h2, 'c3', n_filters=64, filter_size=3, stride=1, init_scale=np.sqrt(2)))
-    h3 = conv_to_fc(h3)
-    return activ(fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2)))
+from feature_extractor import impala_cnn
 
 def process_measurements(X_measurements):
     activ = tf.nn.relu
-    return activ(fc(X_measurements, 'fc1_m', nh=4, init_scale=np.sqrt(2)))
+    h=activ(fc(X_measurements, 'fc1_m', nh=8, init_scale=np.sqrt(2)))
+    return activ(fc(h, 'fc2_m', nh=4, init_scale=np.sqrt(2)))
 
 class CnnPolicy():
 
@@ -29,14 +19,25 @@ class CnnPolicy():
         X_measurements = tf.placeholder(tf.float32, shape=measures_shape)
 
         with tf.variable_scope("model", reuse=reuse):
-            h = tf.cast(nature_cnn(X), tf.float32, name='cast_1')
+            h = tf.cast(impala_cnn(X), tf.float32, name='cast_1')
             h_measurements = tf.cast(process_measurements(X_measurements), tf.float32, name='cast_2')
+            
             h_concat = tf.concat([h, h_measurements], axis=1, name='concat_1')
-            pi = fc(h_concat, 'pi', n_actions, init_scale=0.01)
-            vf = fc(h_concat, 'v', 1)[:,0]
+            h_concat=tf.nn.relu(fc(h_concat, 'after_conc_layer',128,init_scale=np.sqrt(2)))
+            
+            ''' actor model branch '''
+            pi=tf.nn.relu(fc(h_concat,'actor_branch_1',64,init_scale=np.sqrt(2)))
+            pi=tf.nn.relu(fc(pi,'actor_branch_2',16,init_scale=np.sqrt(2)))
+            pi = fc(pi, 'pi', n_actions, init_scale=0.01)
+            
             logstd = tf.get_variable(name="logstd", shape=[1, n_actions], initializer=tf.zeros_initializer())
+            
+            ''' critic branch '''
+            vf= tf.nn.relu(fc(h_concat,'critic_branch_1',32,init_scale=np.sqrt(2)))
+            vf= tf.nn.relu(fc(vf,'critic_branch_2',8,init_scale=np.sqrt(2)))
+            vf = fc(vf, 'v', 1)[:,0]
         
-        pdparam = tf.concat([pi, pi * 0.0 + logstd], axis=1)
+        pdparam = tf.concat([pi,logstd], axis=1)
 
         self.pdtype = make_proba_dist_type(ac_space)
         self.pd = self.pdtype.proba_distribution_from_flat(pdparam)
