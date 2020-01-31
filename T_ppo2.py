@@ -59,10 +59,11 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
             logger.dumpkvs()
         
         # save model
-        if save_each and (update % save_each == 0 or update == 1) and logger.get_dir():
+        if save_each and (update % save_each == 0 or update == 1):
             savepath=os.path.join(os.getcwd(),'checkpoints')
             if not os.path.exists(savepath):
                 os.mkdir(savepath)
+            savepath = os.path.join(savepath, '%.5i'%update)
             print('Saving to', savepath)
             model.save(savepath)
                 

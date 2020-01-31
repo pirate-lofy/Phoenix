@@ -48,7 +48,7 @@ def main():
     gamma=0.99
     n_epochs=1_000_000
     n_opt_epochs=4
-    save_each=20
+    save_each=10
     log_interval=10
     lr=0.0003
     clip_range=0.1

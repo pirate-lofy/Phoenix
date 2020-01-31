@@ -9,19 +9,21 @@ from gym import spaces
 import random
 import cv2 as cv
 import numpy as np
+import math
 
 
 class CarlaEnv:
     n_vehicles=40
     n_peds=30
-    n_actions=3 # TODO: need to convert to continues action space
+    n_actions=3
     
     callibaration_shape=(84,84)
     callibarationRGB_shape=(84,84,3)
     
     # _is_quiet function stuff
-    speed_list=[]
-    speed_list_limit=10
+    movement_list=[]
+    movement_list_limit=30
+    
     wait=15
     num_envs=1
     
@@ -32,10 +34,12 @@ class CarlaEnv:
              'seg':'SemanticSegmentation',
              'depth':'Depth'}
     
-    def __init__(self,host='localhost',port=2000):
+    def __init__(self,host='localhost',port=2000, repeat_frames=3):
+        self.repeat_frames=repeat_frames
+        
         self.observation_space = spaces.Tuple(
             (spaces.Box(0, 255, self.callibarationRGB_shape), 
-            spaces.Box(-np.inf, np.inf, (4,))
+            spaces.Box(-np.inf, np.inf, (5,))
             )
         )
         self.action_space = spaces.Box(-1, 1, shape=(
@@ -80,7 +84,7 @@ class CarlaEnv:
         # remember: Carla needs to get_data once and followed
         # by send_control
         # getting data twice in row causes craching
-        for _ in range(3):
+        for _ in range(self.repeat_frames):
             self.client.send_control(
                     steer=steer,
                     throttle=throttle,
@@ -97,7 +101,7 @@ class CarlaEnv:
                     reverse=False                
                     )
         
-        # speed,dist_to_goal,colls,inters
+        # speed,dist_to_goal,dist_from_start,colls,inters
         data,measures=self._get_data()
         
         reward=self._compute_reward(measures)
@@ -106,7 +110,7 @@ class CarlaEnv:
     
     
     def _empty_cycle(self):
-        print('CarlaEnv log: empty cycle started...')
+        print('\nCarlaEnv log: empty cycle started...')
         for _ in range(self.wait):
             self.client.read_data()
             self.client.send_control(
@@ -116,15 +120,15 @@ class CarlaEnv:
                 hand_brake=False,
                 reverse=False                
                 )
-        print('CarlaEnv log: empty cycle ended.')
+        print('CarlaEnv log: empty cycle ended.\n')
     
     def _is_done(self,measures):
         dist=measures[1]
         goal=self._is_goal(dist)
         bad=self._is_bad_pos(measures)
-        return np.array([goal or bad])
+        return goal or bad
                 
-    
+    #speed,dist_to_goal,dist_from_start,colls,inters
     def _is_bad_pos(self,measures):
         '''
         checks if the car has collided with any thing or
@@ -134,12 +138,17 @@ class CarlaEnv:
         :return: boolean value
         
         '''
-        colls=measures[2]
-        inters=measures[3]
+        colls=measures[3]
+        inters=measures[4]
         return self._did_collide(colls) or self._sidewalk(inters)\
             or self._is_quiet()
 
-                
+               
+    def compute_dif_between_positions(self,cur,prev):
+        dif=np.linalg.norm(np.array(cur)-np.array(prev))
+        prev=cur[:]
+        return 1 if dif>0.001 else 0
+    
     def _is_quiet(self):
         '''
         checks if the car has been stand still for too long
@@ -147,35 +156,38 @@ class CarlaEnv:
         the values in that list, if the sum is zero then the car 
         was stopping.
         checks every frame and save values of speed for only
-        number of frames equals to speed_list_limit.
+        number of frames equals to movement_list_limit.
         
         :return: boolean value
         
         '''
-        if len(self.speed_list)>self.speed_list_limit:
-            self.speed_list=self.speed_list[1:self.speed_list_limit+1]
-        return sum(self.speed_list)==0
+        if len(self.movement_list)>self.movement_list_limit:
+            self.movement_list=self.movement_list[1:self.movement_list_limit+1]
+        return sum(self.movement_list)==0
     
     #TODO: should be revised
+    #speed,dist_to_goal,dist_from_start,colls,inters
     def _compute_reward(self,measures):
         speed=measures[0]
-        dist=measures[1]
-        inters=measures[3]
+        dist_to_goal=measures[1]
+        dist_from_start=measures[2]
+        inters=measures[4]
         
         alpha=0.1 # should be revised
         
-        if self._is_goal(dist):
-            return 1000
+        if self._is_goal(dist_to_goal):
+            return 100
         if self._is_bad_pos(measures):
-            return -1000
-        r=alpha*speed*(dist-inters)
+            return -100
+        r=alpha*(speed+dist_from_start-inters) #------------------
         return r
         
     def _sidewalk(self,inters):
-        return inters>0.3
+        return inters>0.2
     
     def _is_goal(self,dist):
-        return dist<0.1
+        return dist<0.05
+#        return False
     
     def _did_collide(self,colls):
         return colls>0
@@ -196,12 +208,12 @@ class CarlaEnv:
     def _make_measures_blob(self,state,colls,inters):
         pos=np.array(state[0:2])
         dist_to_goal=np.linalg.norm(pos-self.goal)
+        dist_from_start=np.linalg.norm(pos-self.start)
         
         speed=state[2]
         colls=sum(colls)
-        inters=sum(inters)
         
-        return np.array([speed,dist_to_goal,colls,inters])
+        return np.array([speed,dist_to_goal,dist_from_start,colls,inters])
     
     # TODO: need to reconsider the measures we need
     def _measures_preprocessing(self,measures):
@@ -211,17 +223,17 @@ class CarlaEnv:
         pos_y = PM.transform.location.y / 100
         
         # to prevent negative values
-        speed = PM.forward_speed/10.0 if PM.forward_speed>=0 else 0.0001
-        self.speed_list.append(speed)
+        speed = PM.forward_speed/10.0 if PM.forward_speed>=0 else 0
+        dif=self.compute_dif_between_positions([pos_x,pos_y],self.prev_pos)
+        self.movement_list.append(dif)
         
         col_cars = PM.collision_vehicles
         col_ped = PM.collision_pedestrians
         col_other = PM.collision_other
 
-        other_lane = PM.intersection_otherlane
         offroad = PM.intersection_offroad
     
-        return [pos_x, pos_y, speed], [col_cars, col_ped, col_other], [other_lane, offroad]
+        return [pos_x, pos_y, speed], [col_cars, col_ped, col_other],  offroad
     
     def _data_preprocessing(self,data):
         ready_data=[]
@@ -239,9 +251,7 @@ class CarlaEnv:
             
             img_data=np.resize(img_data,self.callibaration_shape)/255.0
             ready_data.append(img_data)
-        
-        # TODO: check the stack technique to get 
-        # RGB-like tensor
+
         return np.stack(ready_data,axis=2)
         
     def _start_new_episod(self):
@@ -266,6 +276,7 @@ class CarlaEnv:
         goal=self.scene.player_start_spots[goal_point]
         
         self.start=[start.location.x/100.0, start.location.y/100.0]
+        self.prev_pos=self.start
         self.goal=[goal.location.x/100.0, goal.location.y/100.0]
         
         self.client.start_episode(start_point)
