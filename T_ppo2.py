@@ -1,6 +1,5 @@
 
 from stable_baselines import logger
-import os.path as osp
 import time
 import numpy as np
 import os
@@ -11,6 +10,8 @@ def safemean(xs):
 
 def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
           clip_range,save_each,log_interval,lr):
+    
+    print('PPO2 log: Training has started....')
             
 #    time_first_start = time.time()
     time_first_start=time.time()
@@ -25,7 +26,7 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
         
         lrnow = lr(frac)
         cliprangenow = clip_range(frac)
-        
+
         img_obs, measure_obs, returns, masks, actions_list, values, neglogpacs = runner.run() #pylint: disable=E0632
 
         mblossvals = []
@@ -66,4 +67,6 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
             savepath = os.path.join(savepath, '%.5i'%update)
             print('Saving to', savepath)
             model.save(savepath)
+
                 
+    print('PPO2 log: Training has ended.')

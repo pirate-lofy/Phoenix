@@ -7,7 +7,7 @@ from model import Model
 from runner import Runner
 
 from environment import CarlaEnv
-
+import numpy as np
 
 def config():
     ncpu=4
@@ -34,8 +34,8 @@ def main():
     
     '''learn parameters'''
     n_envs = 1 # n_batch_actor
-    n_steps=256
-    n_min_patches=32
+    n_steps=4
+    n_min_patches=4
     n_batch = n_envs * n_steps
     n_batch_critic = n_batch // n_min_patches #'''model parameter too'''
     
@@ -49,7 +49,7 @@ def main():
     n_epochs=1_000_000
     n_opt_epochs=4
     save_each=10
-    log_interval=10
+    log_interval=1
     lr=0.0003
     clip_range=0.1
     
@@ -66,6 +66,7 @@ def main():
     
     learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
           clip_range,save_each,log_interval,lr)
+
 
 if __name__=='__main__':
     main()

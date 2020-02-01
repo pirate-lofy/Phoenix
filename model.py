@@ -62,9 +62,13 @@ class Model:
                 td_map
             )[:-1]
             
+#        def save(save_path):
+#            ps = sess.run(params)
+#            joblib.dump(ps, save_path)
         def save(save_path):
             ps = sess.run(params)
             joblib.dump(ps, save_path)
+
 
         def load(load_path):
             loaded_params = joblib.load(load_path)
@@ -83,5 +87,7 @@ class Model:
         self.save = save
         self.load = load
         
-        tf.global_variables_initializer().run(session=sess)
+        tf.global_variables_initializer().run(session=sess)        
+        saver = tf.train.Saver()
+        
         

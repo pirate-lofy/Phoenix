@@ -15,8 +15,8 @@ class CnnPolicy():
         ob_img_shape=(None,*ob_img_space.shape)
         measures_shape = (None,ob_measure_space.shape[0])
         n_actions = ac_space.shape[0]
-        X = tf.placeholder(tf.float32, ob_img_shape) #obs
-        X_measurements = tf.placeholder(tf.float32, shape=measures_shape)
+        X = tf.placeholder(tf.float32, ob_img_shape,name='X') #obs
+        X_measurements = tf.placeholder(tf.float32, shape=measures_shape,name='measures')
 
         with tf.variable_scope("model", reuse=reuse):
             h = tf.cast(impala_cnn(X), tf.float32, name='cast_1')
@@ -44,6 +44,7 @@ class CnnPolicy():
 
         a0 = self.pd.sample()
         neglogp0 = self.pd.neglogp(a0)
+        a1=tf.identity(a0,'actions')
         self.initial_state = None
 
         def step(ob_img, ob_measure, *_args, **_kwargs):
