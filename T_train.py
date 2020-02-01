@@ -34,8 +34,8 @@ def main():
     
     '''learn parameters'''
     n_envs = 1 # n_batch_actor
-    n_steps=4
-    n_min_patches=4
+    n_steps=256
+    n_min_patches=32
     n_batch = n_envs * n_steps
     n_batch_critic = n_batch // n_min_patches #'''model parameter too'''
     
