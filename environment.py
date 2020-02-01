@@ -9,16 +9,23 @@ from gym import spaces
 import random
 import cv2 as cv
 import numpy as np
-import math
 
 
 class CarlaEnv:
     n_vehicles=40
-    n_peds=30
+    n_peds=350
     n_actions=3
     
+    
+    # we get all kinds of cameras and choose between them later
+    #key: the name of the camera
+    #value: the post processing paramerter to function Camera
+    cameras={'rgb':'SceneFinal',
+             'depth':'Depth'}
+#             'seg':'SemanticSegmentation',}   
+    
     callibaration_shape=(84,84)
-    callibarationRGB_shape=(84,84,3)
+    callibarationRGB_shape=(84,84,len(cameras))
     
     # _is_quiet function stuff
     movement_list=[]
@@ -27,12 +34,7 @@ class CarlaEnv:
     wait=15
     num_envs=1
     
-    # we get all kinds of cameras and choose between them later
-    #key: the name of the camera
-    #value: the post processing paramerter to function Camera
-    cameras={'rgb':'SceneFinal',
-             'seg':'SemanticSegmentation',
-             'depth':'Depth'}
+
     
     def __init__(self,host='localhost',port=2000, repeat_frames=3):
         self.repeat_frames=repeat_frames
@@ -60,10 +62,11 @@ class CarlaEnv:
                 print('CarlaEnv log: client connected successfully.')
                 break
             except TCPConnectionError:
-                print('''CarlaEnv log: Client can not connect to the server..\n
+                print('''CarlaEnv log: Client can not connect to the server..
                       Server may not launched yet...''')
         
     def reset(self):
+        print('CarlaEnv log: reseting the world, starting new session..')
         self._start_new_episod()
         
         # just to wait until the car falls from the sky and
@@ -110,7 +113,7 @@ class CarlaEnv:
     
     
     def _empty_cycle(self):
-        print('\nCarlaEnv log: empty cycle started...')
+        print('CarlaEnv log: empty cycle started...')
         for _ in range(self.wait):
             self.client.read_data()
             self.client.send_control(
@@ -144,10 +147,13 @@ class CarlaEnv:
             or self._is_quiet()
 
                
-    def compute_dif_between_positions(self,cur,prev):
-        dif=np.linalg.norm(np.array(cur)-np.array(prev))
-        prev=cur[:]
+    def compute_dif_between_positions(self,cur):
+        dif=np.linalg.norm(np.array(cur)-np.array(self.prev_pos))
+        self.prev_pos[:]=cur[:]
         return 1 if dif>0.001 else 0
+    
+    def init_movement_list(self):
+        self.movement_list=[1 for _ in range(self.movement_list_limit)]
     
     def _is_quiet(self):
         '''
@@ -161,9 +167,8 @@ class CarlaEnv:
         :return: boolean value
         
         '''
-        if len(self.movement_list)>self.movement_list_limit:
-            self.movement_list=self.movement_list[1:self.movement_list_limit+1]
-        return sum(self.movement_list)==0
+        self.movement_list=self.movement_list[1:self.movement_list_limit+1]
+        return  sum(self.movement_list)==0
     
     #TODO: should be revised
     #speed,dist_to_goal,dist_from_start,colls,inters
@@ -224,7 +229,7 @@ class CarlaEnv:
         
         # to prevent negative values
         speed = PM.forward_speed/10.0 if PM.forward_speed>=0 else 0
-        dif=self.compute_dif_between_positions([pos_x,pos_y],self.prev_pos)
+        dif=self.compute_dif_between_positions([pos_x,pos_y])
         self.movement_list.append(dif)
         
         col_cars = PM.collision_vehicles
@@ -276,10 +281,11 @@ class CarlaEnv:
         goal=self.scene.player_start_spots[goal_point]
         
         self.start=[start.location.x/100.0, start.location.y/100.0]
-        self.prev_pos=self.start
+        self.prev_pos=self.start[:]
         self.goal=[goal.location.x/100.0, goal.location.y/100.0]
         
         self.client.start_episode(start_point)
+        self.init_movement_list()
         
     
     def _get_settings(self,n_vehicles,n_peds):
