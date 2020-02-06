@@ -27,13 +27,12 @@ class CarlaEnv:
     callibaration_shape=(84,84)
     callibarationRGB_shape=(84,84,len(cameras))
     
-    # _is_quiet function stuff
-    movement_list=[]
-    movement_list_limit=30
     
     wait=15
     num_envs=1
     
+    stand=300
+    stand_limit=300
 
     
     def __init__(self,host='localhost',port=2000, repeat_frames=3):
@@ -152,23 +151,18 @@ class CarlaEnv:
         self.prev_pos[:]=cur[:]
         return 1 if dif>0.001 else 0
     
-    def init_movement_list(self):
-        self.movement_list=[1 for _ in range(self.movement_list_limit)]
+    def _init_stand(self):
+        self.stand=self.stand_limit
     
     def _is_quiet(self):
-        '''
-        checks if the car has been stand still for too long
-        by storing speed in a list and computing a the sum of all 
-        the values in that list, if the sum is zero then the car 
-        was stopping.
-        checks every frame and save values of speed for only
-        number of frames equals to movement_list_limit.
-        
-        :return: boolean value
-        
-        '''
-        self.movement_list=self.movement_list[1:self.movement_list_limit+1]
-        return  sum(self.movement_list)==0
+        return self.stand==0
+    
+    def _update_stand(self,value):
+        if value and self.stand<self.stand_limit:
+            self.stand=self.stand_limit
+        elif self.stand>0:
+            self.stand-=1
+    
     
     #TODO: should be revised
     #speed,dist_to_goal,dist_from_start,colls,inters
@@ -230,7 +224,8 @@ class CarlaEnv:
         # to prevent negative values
         speed = PM.forward_speed/10.0 if PM.forward_speed>=0 else 0
         dif=self.compute_dif_between_positions([pos_x,pos_y])
-        self.movement_list.append(dif)
+#        self.movement_list.append(dif)
+        self._update_stand(dif)
         
         col_cars = PM.collision_vehicles
         col_ped = PM.collision_pedestrians
@@ -285,7 +280,7 @@ class CarlaEnv:
         self.goal=[goal.location.x/100.0, goal.location.y/100.0]
         
         self.client.start_episode(start_point)
-        self.init_movement_list()
+        self._init_stand()
         
     
     def _get_settings(self,n_vehicles,n_peds):
