@@ -291,6 +291,7 @@ class CarlaEnv:
             NumberOfVehicles=n_vehicles,
             NumberOfPedestrians=n_peds,
             WeatherId=1,
+            QualityLevel='Low'
         )
         settings.randomize_seeds()
         return settings

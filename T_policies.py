@@ -44,7 +44,6 @@ class CnnPolicy():
 
         a0 = self.pd.sample()
         neglogp0 = self.pd.neglogp(a0)
-        a1=tf.identity(a0,'actions')
         self.initial_state = None
 
         def step(ob_img, ob_measure, *_args, **_kwargs):
