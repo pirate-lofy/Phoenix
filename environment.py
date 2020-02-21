@@ -56,7 +56,7 @@ class CarlaEnv:
     def _connect(self,host,port):
         while True:
             try:
-                self.client = CarlaClient(host, port)
+                self.client = CarlaClient(host, port,timeout=200000)
                 self.client.connect()
                 print('CarlaEnv log: client connected successfully.')
                 break
