@@ -15,7 +15,7 @@ class CarlaEnv:
     n_vehicles=40
     n_peds=350
     n_actions=3
-    
+    #hi nour
     
     # we get all kinds of cameras and choose between them later
     #key: the name of the camera
