@@ -1,5 +1,6 @@
 import tensorflow as tf
 import joblib
+import os 
 
 class Model:
     def __init__(self,policy,ob_img_space,ob_measure_space,ac_space,
@@ -7,6 +8,8 @@ class Model:
                  max_grad_norm,frame_stack):
         
         sess=tf.get_default_session()
+        
+        logger=tf.summary.FileWriter(os.path.join(os.getcwd(),'logs'))
         
         actor = policy(sess, ob_img_space, ob_measure_space,ac_space)
         critic = policy(sess, ob_img_space, ob_measure_space,ac_space,reuse=True)
@@ -62,9 +65,14 @@ class Model:
                 td_map
             )[:-1]
             
-#        def save(save_path):
-#            ps = sess.run(params)
-#            joblib.dump(ps, save_path)
+
+        def log():
+#            tf.summary.scalar('loss',loss)
+#            tf.summary.scalar('actor mean',actor.pi)
+#            tf.summary.scalar('value',actor.vf)
+            logger.add_summary(
+            tf.summary.scalar('value',actor.vf))
+
         def save(save_path):
             ps = sess.run(params)
             joblib.dump(ps, save_path)
@@ -86,8 +94,8 @@ class Model:
         self.actor = actor
         self.save = save
         self.load = load
+        self.log=log
         
         tf.global_variables_initializer().run(session=sess)        
-        saver = tf.train.Saver()
         
         

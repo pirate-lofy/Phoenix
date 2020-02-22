@@ -11,6 +11,8 @@ def process_measurements(X_measurements):
 
 class CnnPolicy():
 
+    # TODO: replace the fixed logstd with dynamic one
+    # TODO: try to use Embedding layer (or not)
     def __init__(self, sess, ob_img_space, ob_measure_space, ac_space, reuse=False): #pylint: disable=W0613
         ob_img_shape=(None,*ob_img_space.shape)
         measures_shape = (None,ob_measure_space.shape[0])
