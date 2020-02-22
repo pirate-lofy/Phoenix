@@ -164,3 +164,4 @@ class Converter(object):
             return NODE
         else:
             return PIXEL
+        
