@@ -5,7 +5,6 @@ import numpy as np
 import os
 import shutil
 
-# Master Branch
 
 def safemean(xs):
     return np.nan if len(xs) == 0 else np.mean(xs)
@@ -29,6 +28,8 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
         lrnow = lr(frac)
         cliprangenow = clip_range(frac)
 
+        # step 1 in the algotithm
+        # collect N transition
         img_obs, measure_obs, returns, masks, actions_list, values, neglogpacs = runner.run() #pylint: disable=E0632
 
         mblossvals = []

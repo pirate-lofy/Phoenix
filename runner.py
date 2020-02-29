@@ -31,6 +31,7 @@ class Runner:
     def run(self):
         img_obs, measure_obs, rewards, actions_list, values, dones, neglogpacs = [],[],[],[],[],[],[]
 
+        # collecting trnasitions
         for stp in range(self.n_steps):
             actions, value, self.states, neglogpac = self.model.step(self.obs_image, self.obs_measure, 
                                                                      self.states, self.done)
@@ -61,6 +62,9 @@ class Runner:
         values = np.asarray(values, dtype=np.float32)
         neglogpacs = np.asarray(neglogpacs, dtype=np.float32)
         dones = np.asarray(dones, dtype=np.bool)
+        
+        # for the reversed loop 
+        # getting the v' for the last state
         last_values = self.model.value(self.obs_image, self.obs_measure, self.states, self.done)
         
         returns = np.zeros_like(rewards)
