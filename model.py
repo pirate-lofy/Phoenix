@@ -25,15 +25,19 @@ class Model:
         neglogpac = critic.pd.neglogp(A)
         entropy = tf.reduce_mean(critic.pd.entropy())
         
+        # mse for the value loss
         vpred = critic.vf
         vpredclipped = OLDVPRED + tf.clip_by_value(critic.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE)
         vf_losses1 = tf.square(vpred - R)
         vf_losses2 = tf.square(vpredclipped - R)
         vf_loss = .5 * tf.reduce_mean(tf.maximum(vf_losses1, vf_losses2))
+        
+        # surrogate nppolicy loss
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
         pg_losses = -ADV * ratio
         pg_losses2 = -ADV * tf.clip_by_value(ratio, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE)
         pg_loss = tf.reduce_mean(tf.maximum(pg_losses, pg_losses2))
+        
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
@@ -52,9 +56,10 @@ class Model:
         self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
         
         def train(lr, cliprange, img_obs, measure_obs, returns, masks, actions, values, neglogpacs, states=None):
-
+            # step 3
             advs = returns - values
             advs = (advs - advs.mean()) / (advs.std() + 1e-8)
+            
             td_map = {critic.X:img_obs,critic.X_measurements:measure_obs, A:actions, ADV:advs, R:returns, LR:lr,
                     CLIPRANGE:cliprange, OLDNEGLOGPAC:neglogpacs, OLDVPRED:values}
             if states is not None:

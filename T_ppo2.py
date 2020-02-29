@@ -28,15 +28,21 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
         lrnow = lr(frac)
         cliprangenow = clip_range(frac)
 
+        # step 1 in the algorithm
+        # collect N transactions
         img_obs, measure_obs, returns, masks, actions_list, values, neglogpacs = runner.run() #pylint: disable=E0632
 
         mblossvals = []
         
         # recurrent and non-recurrent
         inds = np.arange(n_batch)
+        
+        # step 3,4
+        # for epochs
         for opt in range(n_opt_epochs):
             np.random.shuffle(inds)
             
+            # get mini patches
             for start in range(0, n_batch, n_batch_critic):
                 end = start + n_batch_critic
                 mbinds = inds[start:end]

@@ -6,7 +6,6 @@ class Runner:
         self.lam = lam
         self.gamma=gamma
         self.n_steps = n_steps
-        self.states = model.initial_state
         self.done=False
         
         obs_img, obs_measure = env.reset()
@@ -31,9 +30,9 @@ class Runner:
     def run(self):
         img_obs, measure_obs, rewards, actions_list, values, dones, neglogpacs = [],[],[],[],[],[],[]
 
+        # collect trasactions
         for stp in range(self.n_steps):
-            actions, value, self.states, neglogpac = self.model.step(self.obs_image, self.obs_measure, 
-                                                                     self.states, self.done)
+            actions, value, neglogpac = self.model.step(self.obs_image, self.obs_measure)
             
             # append current state's data
             img_obs.append(self.obs_image.copy())
@@ -61,12 +60,16 @@ class Runner:
         values = np.asarray(values, dtype=np.float32)
         neglogpacs = np.asarray(neglogpacs, dtype=np.float32)
         dones = np.asarray(dones, dtype=np.bool)
-        last_values = self.model.value(self.obs_image, self.obs_measure, self.states, self.done)
+        
+        # getting the v' for the last state
+        # for the reversed operation
+        last_values = self.model.value(self.obs_image, self.obs_measure)
         
         returns = np.zeros_like(rewards)
         advs = np.zeros_like(rewards)
         lastgaelam = 0
         
+        # GAE
         for t in reversed(range(self.n_steps)):
             if t == self.n_steps - 1:
                 nextnonterminal = 1.0 - self.done

@@ -27,16 +27,16 @@ class CnnPolicy():
             h_concat = tf.concat([h, h_measurements], axis=1, name='concat_1')
             h_concat=tf.nn.relu(fc(h_concat, 'after_conc_layer',128,init_scale=np.sqrt(2)))
             
-            ''' actor model branch '''
-            pi=tf.nn.relu(fc(h_concat,'actor_branch_1',64,init_scale=np.sqrt(2)))
-            pi=tf.nn.relu(fc(pi,'actor_branch_2',16,init_scale=np.sqrt(2)))
+            ''' policy model branch '''
+            pi=tf.nn.relu(fc(h_concat,'policy_branch_1',64,init_scale=np.sqrt(2)))
+            pi=tf.nn.relu(fc(pi,'policy_branch_2',16,init_scale=np.sqrt(2)))
             pi = fc(pi, 'pi', n_actions, init_scale=0.01)
             
             logstd = tf.get_variable(name="logstd", shape=[1, n_actions], initializer=tf.zeros_initializer())
             
-            ''' critic branch '''
-            vf= tf.nn.relu(fc(h_concat,'critic_branch_1',32,init_scale=np.sqrt(2)))
-            vf= tf.nn.relu(fc(vf,'critic_branch_2',8,init_scale=np.sqrt(2)))
+            ''' value branch '''
+            vf= tf.nn.relu(fc(h_concat,'value_branch_1',32,init_scale=np.sqrt(2)))
+            vf= tf.nn.relu(fc(vf,'value_branch_2',8,init_scale=np.sqrt(2)))
             vf = fc(vf, 'v', 1)[:,0]
         
         pdparam = tf.concat([pi,logstd], axis=1)
@@ -48,11 +48,11 @@ class CnnPolicy():
         neglogp0 = self.pd.neglogp(a0)
         self.initial_state = None
 
-        def step(ob_img, ob_measure, *_args, **_kwargs):
+        def step(ob_img, ob_measure):
             a, v, neglogp = sess.run([a0, vf, neglogp0], {X:ob_img, X_measurements:ob_measure})
-            return a, v, self.initial_state, neglogp
+            return a, v, neglogp
 
-        def value(ob_img, ob_measure, *_args, **_kwargs):
+        def value(ob_img, ob_measure):
             return sess.run(vf, {X:ob_img, X_measurements:ob_measure})
 
         self.X = X
