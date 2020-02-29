@@ -56,7 +56,7 @@ class CarlaEnv:
     def _connect(self,host,port):
         while True:
             try:
-                self.client = CarlaClient(host, port,timeout=20000000)
+                self.client = CarlaClient(host, port,timeout=200000)
                 self.client.connect()
                 print('CarlaEnv log: client connected successfully.')
                 break
@@ -72,7 +72,7 @@ class CarlaEnv:
         # becomes ready 
         # may prevent the collision sensor from recording 
         # falling as collision
-        self._empty_cycle()
+#        self._empty_cycle()
         
         data,measures=self._get_data(reset=True)
         return data,measures
