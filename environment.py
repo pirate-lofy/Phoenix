@@ -56,11 +56,7 @@ class CarlaEnv:
     def _connect(self,host,port):
         while True:
             try:
-<<<<<<< HEAD
                 self.client = CarlaClient(host, port,timeout=200000)
-=======
-                self.client = CarlaClient(host, port, timeout=20000)
->>>>>>> fd739eab73d2524b79d90dc7a96f47e30b654269
                 self.client.connect()
                 print('CarlaEnv log: client connected successfully.')
                 break
@@ -119,6 +115,7 @@ class CarlaEnv:
         print('CarlaEnv log: empty cycle started...')
         for _ in range(self.wait):
             self.client.read_data()
+            print('read')
             self.client.send_control(
                 steer=0,
                 throttle=0,
@@ -126,6 +123,7 @@ class CarlaEnv:
                 hand_brake=False,
                 reverse=False                
                 )
+            print('control')
         print('CarlaEnv log: empty cycle ended.\n')
     
     def _is_done(self,measures):
