@@ -37,6 +37,9 @@ class CarlaEnv:
     
     def __init__(self,host='localhost',port=2000, repeat_frames=3):
         self.repeat_frames=repeat_frames
+        self.host=host
+        self.port=port
+        self.client=None
         
         self.observation_space = spaces.Tuple(
             (spaces.Box(0, 255, self.callibarationRGB_shape), 
@@ -49,9 +52,15 @@ class CarlaEnv:
         self.settings=self._get_settings(
                 self.n_vehicles,self.n_peds)
         self._add_cameras()
-        
+
+ 
+    def _initialize_connection(self,host,port):
+        if self.client.connected():
+            self.client.disconnect()
+            self.client=None
         self._connect(host,port)
         self.scene=self.client.load_settings(self.settings)
+ 
     
     def _connect(self,host,port):
         while True:
@@ -66,13 +75,14 @@ class CarlaEnv:
         
     def reset(self):
         print('CarlaEnv log: reseting the world, starting new session..')
+        self._initialize_connection(self.host,self.port)
         self._start_new_episod()
         
         # just to wait until the car falls from the sky and
         # becomes ready 
         # may prevent the collision sensor from recording 
         # falling as collision
-#        self._empty_cycle()
+        self._empty_cycle()
         
         data,measures=self._get_data(reset=True)
         return data,measures
@@ -115,7 +125,6 @@ class CarlaEnv:
         print('CarlaEnv log: empty cycle started...')
         for _ in range(self.wait):
             self.client.read_data()
-            print('read')
             self.client.send_control(
                 steer=0,
                 throttle=0,
@@ -123,7 +132,6 @@ class CarlaEnv:
                 hand_brake=False,
                 reverse=False                
                 )
-            print('control')
         print('CarlaEnv log: empty cycle ended.\n')
     
     def _is_done(self,measures):
