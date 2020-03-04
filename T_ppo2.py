@@ -38,11 +38,13 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
         inds = np.arange(n_batch)
         for opt in range(n_opt_epochs):
             np.random.shuffle(inds)
+            runner.env.reset()
             
             for start in range(0, n_batch, n_batch_critic):
                 end = start + n_batch_critic
                 mbinds = inds[start:end]
                 slices = (arr[mbinds] for arr in (img_obs, measure_obs, returns, masks, actions_list, values, neglogpacs))
+                
                 mblossvals.append(model.train(lrnow, cliprangenow, *slices))
         
         
@@ -76,6 +78,5 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
             model.save(savepath)
         
         
-        runner.env.reset()
                 
     print('PPO2 log: Training has ended.')

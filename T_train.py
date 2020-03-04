@@ -8,6 +8,7 @@ from runner import Runner
 
 from environment import CarlaEnv
 import numpy as np
+from time import time
 
 def config():
     ncpu=4
@@ -69,4 +70,9 @@ def main():
 
 
 if __name__=='__main__':
-    main()
+    s=time()
+    try:
+        main()
+    except:
+        print(time()-s)
+    

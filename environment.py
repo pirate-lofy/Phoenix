@@ -35,7 +35,7 @@ class CarlaEnv:
     stand_limit=300
 
     
-    def __init__(self,host='localhost',port=2000, repeat_frames=3):
+    def __init__(self,host='localhost',port=2001, repeat_frames=3):
         self.repeat_frames=repeat_frames
         self.host=host
         self.port=port
@@ -52,15 +52,9 @@ class CarlaEnv:
         self.settings=self._get_settings(
                 self.n_vehicles,self.n_peds)
         self._add_cameras()
-
- 
-    def _initialize_connection(self,host,port):
-        if self.client.connected():
-            self.client.disconnect()
-            self.client=None
         self._connect(host,port)
         self.scene=self.client.load_settings(self.settings)
- 
+
     
     def _connect(self,host,port):
         while True:
@@ -75,7 +69,7 @@ class CarlaEnv:
         
     def reset(self):
         print('CarlaEnv log: reseting the world, starting new session..')
-        self._initialize_connection(self.host,self.port)
+#        self._initialize_connection(self.host,self.port)
         self._start_new_episod()
         
         # just to wait until the car falls from the sky and
