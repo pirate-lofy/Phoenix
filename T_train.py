@@ -1,4 +1,4 @@
-from stable_baselines.common import set_global_seeds
+
 import tensorflow as tf
 
 from T_ppo2 import learn
@@ -6,10 +6,10 @@ from T_policies import CnnPolicy
 from model import Model
 from runner import Runner
 
-from environment import CarlaEnv
-import numpy as np
-from time import time
+print('here')
+env=None
 
+from new_env import CarlaEnv
 def config():
     ncpu=4
     config = tf.ConfigProto(allow_soft_placement=True,
@@ -24,6 +24,7 @@ def constfn(val):
     return f
 
 def main():
+    global env
     config()
     policy = CnnPolicy
     env=CarlaEnv()
@@ -47,7 +48,7 @@ def main():
     frame_stack=2
     lam=0.95
     gamma=0.99
-    n_epochs=1_000_000
+    n_epochs=1000000
     n_opt_epochs=4
     save_each=10
     log_interval=1
@@ -70,9 +71,7 @@ def main():
 
 
 if __name__=='__main__':
-    s=time()
     try:
         main()
     except:
-        print(time()-s)
-    
+        env.destroy()

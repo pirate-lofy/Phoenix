@@ -1,5 +1,7 @@
 import tensorflow as tf
 import joblib
+import os 
+from tensorboardX import SummaryWriter
 
 class Model:
     def __init__(self,policy,ob_img_space,ob_measure_space,ac_space,
@@ -7,6 +9,8 @@ class Model:
                  max_grad_norm,frame_stack):
         
         sess=tf.get_default_session()
+        
+        writer = SummaryWriter(logdir='log')
         
         actor = policy(sess, ob_img_space, ob_measure_space,ac_space)
         critic = policy(sess, ob_img_space, ob_measure_space,ac_space,reuse=True)
@@ -22,15 +26,19 @@ class Model:
         neglogpac = critic.pd.neglogp(A)
         entropy = tf.reduce_mean(critic.pd.entropy())
         
+        # mse for the value loss
         vpred = critic.vf
         vpredclipped = OLDVPRED + tf.clip_by_value(critic.vf - OLDVPRED, - CLIPRANGE, CLIPRANGE)
         vf_losses1 = tf.square(vpred - R)
         vf_losses2 = tf.square(vpredclipped - R)
         vf_loss = .5 * tf.reduce_mean(tf.maximum(vf_losses1, vf_losses2))
+        
+        # surrogate nppolicy loss
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
         pg_losses = -ADV * ratio
         pg_losses2 = -ADV * tf.clip_by_value(ratio, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE)
         pg_loss = tf.reduce_mean(tf.maximum(pg_losses, pg_losses2))
+        
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
@@ -49,9 +57,10 @@ class Model:
         self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
         
         def train(lr, cliprange, img_obs, measure_obs, returns, masks, actions, values, neglogpacs, states=None):
-
+            # step 3
             advs = returns - values
             advs = (advs - advs.mean()) / (advs.std() + 1e-8)
+            
             td_map = {critic.X:img_obs,critic.X_measurements:measure_obs, A:actions, ADV:advs, R:returns, LR:lr,
                     CLIPRANGE:cliprange, OLDNEGLOGPAC:neglogpacs, OLDVPRED:values}
             if states is not None:
@@ -62,9 +71,15 @@ class Model:
                 td_map
             )[:-1]
             
-#        def save(save_path):
-#            ps = sess.run(params)
-#            joblib.dump(ps, save_path)
+
+        def log(itr):
+            writer.add_scalar("loss", loss,itr)
+            print('log1')
+            writer.add_scalar('actor mean',actor.pi,itr)
+            writer.add_scalar('value',actor.vf,itr)
+            writer.add_scalar("loss", loss,itr)
+            writer.add_scalar("entropy",entropy,itr)
+
         def save(save_path):
             ps = sess.run(params)
             joblib.dump(ps, save_path)
@@ -86,8 +101,8 @@ class Model:
         self.actor = actor
         self.save = save
         self.load = load
+        self.log=log
         
         tf.global_variables_initializer().run(session=sess)        
-        saver = tf.train.Saver()
         
         

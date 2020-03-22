@@ -3,29 +3,31 @@ from carla.settings import CarlaSettings
 from carla.sensor import Camera
 from carla.tcp import TCPConnectionError
 from carla.image_converter import labels_to_cityscapes_palette
+from carla.planner.planner import Planner
 
+from seg.segmentator import Segmentator
 from gym import spaces
 
 import random
 import cv2 as cv
 import numpy as np
 
+import matplotlib.pyplot as plt
+
+# TODO: add segmentator
+# TODO: replace the baselines with the one u make
 
 class CarlaEnv:
     n_vehicles=40
     n_peds=350
     n_actions=3
-    #hi nour
+    
     
     # we get all kinds of cameras and choose between them later
-    #key: the name of the camera
-    #value: the post processing paramerter to function Camera
-    cameras={'rgb':'SceneFinal',
-             'depth':'Depth'}
-#             'seg':'SemanticSegmentation',}   
+    cameras=['rgb','seg']   
     
-    callibaration_shape=(84,84)
-    callibarationRGB_shape=(84,84,len(cameras))
+    callibaration_shape=(182,192)
+    callibarationRGB_shape=(182,192,len(cameras))
     
     
     wait=15
@@ -33,13 +35,12 @@ class CarlaEnv:
     
     stand=300
     stand_limit=300
+    
+    resetings=0 
 
     
-    def __init__(self,host='localhost',port=2001, repeat_frames=3):
+    def __init__(self,host='localhost',port=2000, repeat_frames=1,town_name='Town01'):
         self.repeat_frames=repeat_frames
-        self.host=host
-        self.port=port
-        self.client=None
         
         self.observation_space = spaces.Tuple(
             (spaces.Box(0, 255, self.callibarationRGB_shape), 
@@ -49,17 +50,20 @@ class CarlaEnv:
         self.action_space = spaces.Box(-1, 1, shape=(
                 self.n_actions,))
         
+        self.planner=Planner(town_name)
+        self.segmentator=Segmentator()
+        
         self.settings=self._get_settings(
                 self.n_vehicles,self.n_peds)
         self._add_cameras()
+        
         self._connect(host,port)
         self.scene=self.client.load_settings(self.settings)
-
     
     def _connect(self,host,port):
         while True:
             try:
-                self.client = CarlaClient(host, port,timeout=200000)
+                self.client = CarlaClient(host, port,2000000)
                 self.client.connect()
                 print('CarlaEnv log: client connected successfully.')
                 break
@@ -68,8 +72,9 @@ class CarlaEnv:
                       Server may not launched yet...''')
         
     def reset(self):
-        print('CarlaEnv log: reseting the world, starting new session..')
-#        self._initialize_connection(self.host,self.port)
+        self.resetings+=1
+        print('CarlaEnv log: reseting the world for the {} time'.format(self.resetings))
+        print('CarlaEnv log: starting a new session..')
         self._start_new_episod()
         
         # just to wait until the car falls from the sky and
@@ -186,7 +191,7 @@ class CarlaEnv:
         return r
         
     def _sidewalk(self,inters):
-        return inters>0.2
+        return inters>0.
     
     def _is_goal(self,dist):
         return dist<0.05
@@ -200,7 +205,7 @@ class CarlaEnv:
         
         # dave it just in case!
         if reset:
-            self.start_time=measures.game_timestamp
+            self.start_location_time=measures.game_timestamp
         
         data=self._data_preprocessing(data)
         state,colls,inters=self._measures_preprocessing(measures)
@@ -210,15 +215,21 @@ class CarlaEnv:
     
     def _make_measures_blob(self,state,colls,inters):
         pos=np.array(state[0:2])
-        dist_to_goal=np.linalg.norm(pos-self.goal)
-        dist_from_start=np.linalg.norm(pos-self.start)
+        dist_to_goal=np.linalg.norm(pos-self.goal_location)
+        dist_from_start=np.linalg.norm(pos-self.start_location)
         
         speed=state[2]
         colls=sum(colls)
         
         return np.array([speed,dist_to_goal,dist_from_start,colls,inters])
     
-    # TODO: need to reconsider the measures we need
+    
+    def _get_one_hot(self,source,des):
+        print('\n\n\n\n',dir(source))
+        c=self.planner.get_next_command(source.location,source.orientation,
+                                        des.location,des.orientation)
+    
+    # TODO: add onehot vector
     def _measures_preprocessing(self,measures):
         PM = measures.player_measurements
 
@@ -236,28 +247,52 @@ class CarlaEnv:
         col_other = PM.collision_other
 
         offroad = PM.intersection_offroad
+        
+#        command=self._get_one_hot(PM.transform,self.goal)
+        
     
         return [pos_x, pos_y, speed], [col_cars, col_ped, col_other],  offroad
     
+#    def _data_preprocessing(self,data):
+#        ready_data=[]
+#        for key in self.cameras:
+#            img,img_data=data[key],data[key].data
+#            
+#            if key=='seg':
+#                img_data=self.segmentator.forward(img_data)
+#            # depth camera produces gray scale image
+#            if not key=='depth':
+#                # astype('float32') is needed as attribute data
+#                # returns data in float64 format which generates
+#                # error with opencv
+#                img_data=cv.cvtColor(img_data.astype('float32'),cv.COLOR_BGR2GRAY)
+#            
+#            img_data=np.resize(img_data,self.callibaration_shape)/255.0
+#            ready_data.append(img_data)
+#
+#        return np.stack(ready_data,axis=2)
+        
     def _data_preprocessing(self,data):
         ready_data=[]
-        for key in self.cameras.keys():
-            img,img_data=data[key],data[key].data
-            
-            if key=='seg':
-                img_data=labels_to_cityscapes_palette(img)
-            # depth camera produces gray scale image
-            if not key=='depth':
-                # astype('float32') is needed as attribute data
-                # returns data in float64 format which generates
-                # error with opencv
-                img_data=cv.cvtColor(img_data.astype('float32'),cv.COLOR_BGR2GRAY)
-            
-            img_data=np.resize(img_data,self.callibaration_shape)/255.0
-            ready_data.append(img_data)
+        img_data=data['rgb'].data
+        seg_data=self.segmentator.forward(img_data)          
+        seg_data=cv.cvtColor(seg_data.astype('float32'),cv.COLOR_BGR2GRAY)
+        
+        img_data=cv.cvtColor(img_data.astype('float32'),cv.COLOR_BGR2GRAY)
+        
+        img_data=img_data[:350,:]
+        seg_data=seg_data[:350,:]        
+#        
+        img_data=cv.resize(img_data,(192,182),cv.INTER_AREA)/255.
+        seg_data=cv.resize(seg_data,(192,182),cv.INTER_AREA)/255.
+                        
+        ready_data.append(img_data)
+        ready_data.append(seg_data)
+    
 
         return np.stack(ready_data,axis=2)
-        
+    
+    
     def _start_new_episod(self):
         '''
         chooses a random position for the car to start from 
@@ -276,12 +311,12 @@ class CarlaEnv:
         while start_point==goal_point:
             goal_point=random.randint(0,max(0,n_spots-1))
         
-        start=self.scene.player_start_spots[start_point]
-        goal=self.scene.player_start_spots[goal_point]
+        self.start=self.scene.player_start_spots[start_point]
+        self.goal=self.scene.player_start_spots[goal_point]
         
-        self.start=[start.location.x/100.0, start.location.y/100.0]
-        self.prev_pos=self.start[:]
-        self.goal=[goal.location.x/100.0, goal.location.y/100.0]
+        self.start_location=[self.start.location.x/100.0, self.start.location.y/100.0]
+        self.prev_pos=self.start_location[:]
+        self.goal_location=[self.goal.location.x/100.0, self.goal.location.y/100.0]
         
         self.client.start_episode(start_point)
         self._init_stand()
@@ -295,17 +330,16 @@ class CarlaEnv:
             NumberOfVehicles=n_vehicles,
             NumberOfPedestrians=n_peds,
             WeatherId=1,
-            QualityLevel='Low'
+            QualityLevel='Low',
+#            ServerTimeOut=10000
         )
         settings.randomize_seeds()
         return settings
     
     def _add_cameras(self):            
-        for name,postproc in self.cameras.items():
-            cam=Camera(name,PostProcessing=postproc)
-            cam.set(FOV=90.0)
-            cam.set_image_size(self.observation_space[1],
-                               self.observation_space[0])
-            cam.set_position(x=0.30, y=0, z=1.30)
-            cam.set_rotation(pitch=0, yaw=0, roll=0)
-            self.settings.add_sensor(cam)
+        cam=Camera('rgb')
+        cam.set(FOV=90.0)
+        cam.set_image_size(896,512)
+        cam.set_position(x=0.30, y=0, z=1.30)
+        cam.set_rotation(pitch=0, yaw=0, roll=0)
+        self.settings.add_sensor(cam)

@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from stable_baselines.a2c.utils import conv, fc, conv_to_fc
+from baselines.a2c.utils import conv, fc, conv_to_fc
 
 def nature_cnn(unscaled_images):
     """
@@ -14,6 +14,7 @@ def nature_cnn(unscaled_images):
     h3 = conv_to_fc(h3)
     return activ(fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2)))
 
+# TODO: try to add lstm to impala
 
 def impala_cnn(unscaled_images, depths=[16,32,32]):
     layer_num = 0
