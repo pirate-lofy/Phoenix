@@ -31,6 +31,7 @@ class CarlaEnv:
     is_goal=None
     bad_pos=None
     reset_timer=0
+    wait=300
     
     rgb_data=None
     seg_data=None
@@ -156,8 +157,7 @@ class CarlaEnv:
         self.reset_timer+=1
 
     
-    def _empty_cycle(self):
-        time.sleep(2)
+    def _initialize_position(self):
         self.vehicle.apply_control(carla.VehicleControl(brake=0.0, throttle=0.0))
         transform = random.choice(self.map.get_spawn_points())
         self.vehicle.set_transform(transform)
@@ -169,6 +169,13 @@ class CarlaEnv:
         sp=np.array([self.start_loc.x,self.start_loc.y])
         gp=np.array([self.goal_loc.x,self.goal_loc.y])
         self.dist_from_start_to_end=np.linalg.norm(sp-gp)
+        time.sleep(2)
+    
+    def _empty_cycle(self):
+        print(Fore.YELLOW+'CarlaEnv log: empty cycle'+Fore.WHITE)
+        for _ in  range(self.wait):
+            self.step([[0.,0.,0.]])
+        print(Fore.YELLOW+'CarlaEnv log: empty cycle ended'+Fore.WHITE)
     
     def _get_vector_value(self,vec):
         return sqrt(vec.x**2+vec.y**2)
@@ -272,8 +279,9 @@ class CarlaEnv:
     def reset(self):
         print(Fore.YELLOW+'CarlaEnv log: reset for the {0} time'.format(self.reset_timer)+Fore.WHITE)
         self._clear_history()
-        self._empty_cycle()
+        self._initialize_position()
         self._init_stand()
+#        self._empty_cycle()
         data,measures=self._get_data()
         return data,measures
     
@@ -293,6 +301,9 @@ class CarlaEnv:
         reward=self._compute_reward(measures)
         done=self._is_done(measures[4],measures[3])
         return data,measures,reward,done,{}
+    
+    def dead_command(self):
+        self.step([[0.,0.,0.]])
     
     def destroy(self):
         for actor in self.actors:

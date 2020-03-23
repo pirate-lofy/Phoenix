@@ -4,7 +4,7 @@ import numpy as np
 import os
 import shutil
 from colorama import Fore
-
+import subprocess as sp
 
 def safemean(xs):
     return np.nan if len(xs) == 0 else np.mean(xs)
@@ -12,12 +12,15 @@ def safemean(xs):
 def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
           clip_range,save_each,log_interval,lr):
     
+    _ = sp.call('clear',shell=True)
+    
     print(Fore.GREEN+'PPO2 log: Training has started....'+Fore.WHITE)
-            
-#    time_first_start = time.time()
+                
+
     time_first_start=time.time()
     n_updates = n_epochs//n_batch
     e_time=50
+    
     for update in range(1, n_updates+1):
         s=time.time()
         assert n_batch % n_min_patches == 0
@@ -31,6 +34,7 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
 
         # step 1 in the algorithm
         # collect N transactions
+        print(Fore.GREEN+'PPO2 log: runner cycle'+Fore.WHITE)
         img_obs, measure_obs, returns, masks, actions_list, values, neglogpacs = runner.run() #pylint: disable=E0632
 
         mblossvals = []
@@ -40,6 +44,7 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
         
         # step 3,4
         # for epochs
+        print(Fore.GREEN+'PPO2 log: training cycle'+Fore.WHITE)
         for opt in range(n_opt_epochs):
             np.random.shuffle(inds)
             
@@ -60,7 +65,7 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
                 runner.env.reset()
         lossvals = np.mean(mblossvals, axis=0)
         tnow = time.time()
-        fps = 1.0 / (tnow - tstart)
+        fps=n_batch/(tnow-tstart)
         
         # log to print results
         if update % log_interval == 0 or update == 1:
@@ -71,7 +76,7 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
             logger.logkv('returnmean', safemean(returns))
             logger.logkv('time_elapsed', tnow - time_first_start)
             for (lossval, lossname) in zip(lossvals, model.loss_names):
-                logger.logkv(lossname, lossval)
+                logger.logkv('loss/'+lossname, lossval)
             logger.dumpkvs()
             
             

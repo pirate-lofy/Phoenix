@@ -1,6 +1,5 @@
 import tensorflow as tf
 import joblib
-import os 
 from tensorboardX import SummaryWriter
 
 class Model:
@@ -61,11 +60,22 @@ class Model:
             advs = returns - values
             advs = (advs - advs.mean()) / (advs.std() + 1e-8)
             
-            td_map = {critic.X:img_obs,critic.X_measurements:measure_obs, A:actions, ADV:advs, R:returns, LR:lr,
-                    CLIPRANGE:cliprange, OLDNEGLOGPAC:neglogpacs, OLDVPRED:values}
+            td_map = {
+                    critic.X:img_obs,
+                      critic.X_measurements:measure_obs, 
+                      A:actions, 
+                      ADV:advs, 
+                      R:returns, 
+                      LR:lr,
+                      CLIPRANGE:cliprange, 
+                      OLDNEGLOGPAC:neglogpacs, 
+                      OLDVPRED:values
+                      }
+            
             if states is not None:
                 td_map[critic.S] = states
                 td_map[critic.M] = masks
+            
             return sess.run(
                 [pg_loss, vf_loss, entropy, approxkl, clipfrac, _train],
                 td_map

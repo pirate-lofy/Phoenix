@@ -51,7 +51,9 @@ class Runner:
 
             if self.done:
                 self.env.reset()
-                
+          
+        self.env.dead_command()
+        
         #convert them to numpy array
         img_obs = np.asarray(img_obs, dtype=self.obs_image.dtype)
         measure_obs = np.asarray(measure_obs, dtype=self.obs_measure.dtype)
