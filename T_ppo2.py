@@ -13,6 +13,7 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
           clip_range,save_each,log_interval,lr):
     
     _ = sp.call('clear',shell=True)
+    rond=0
     
     print(Fore.GREEN+'PPO2 log: Training has started....'+Fore.WHITE)
                 
@@ -55,9 +56,9 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
                 mbinds = inds[start:end]
                 slices = (arr[mbinds] for arr in (img_obs, measure_obs, returns, masks, actions_list, values, neglogpacs))
                 mblossvals.append(model.train(lrnow, cliprangenow, *slices))
-#                print('triaing')
-#                model.log(rond)
-#                rond+=1
+                print(Fore.GREEN+'PPO2 log: logging summaries'+Fore.WHITE)
+                model.log(rond)
+                rond+=1
             
             if time.time()>=s+e_time:
                 print(Fore.GREEN+'PPO2 log: Exceeded the full episode time'+Fore.WHITE)

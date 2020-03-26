@@ -1,6 +1,5 @@
 import tensorflow as tf
 import joblib
-from tensorboardX import SummaryWriter
 
 class Model:
     def __init__(self,policy,ob_img_space,ob_measure_space,ac_space,
@@ -9,10 +8,9 @@ class Model:
         
         sess=tf.get_default_session()
         
-        writer = SummaryWriter(logdir='log')
-        
         actor = policy(sess, ob_img_space, ob_measure_space,ac_space)
         critic = policy(sess, ob_img_space, ob_measure_space,ac_space,reuse=True)
+        
         
         '''-----------------------------------------'''
         A = critic.pdtype.sample_placeholder([None])
@@ -41,7 +39,7 @@ class Model:
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
-        '''-----------------------------------------'''
+        '''-----------------------------------------'''        
         
         with tf.variable_scope('model'):
             params = tf.trainable_variables()
@@ -82,14 +80,6 @@ class Model:
             )[:-1]
             
 
-        def log(itr):
-            writer.add_scalar("loss", loss,itr)
-            print('log1')
-            writer.add_scalar('actor mean',actor.pi,itr)
-            writer.add_scalar('value',actor.vf,itr)
-            writer.add_scalar("loss", loss,itr)
-            writer.add_scalar("entropy",entropy,itr)
-
         def save(save_path):
             ps = sess.run(params)
             joblib.dump(ps, save_path)
@@ -102,7 +92,6 @@ class Model:
                 restores.append(p.assign(loaded_p))
             sess.run(restores)
         
-            
         self.step = actor.step
         self.value = actor.value
         self.initial_state = actor.initial_state
