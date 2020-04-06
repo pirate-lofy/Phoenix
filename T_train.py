@@ -35,8 +35,8 @@ def main():
     
     '''learn parameters'''
     n_envs = 1 # n_batch_actor
-    n_steps=16
-    n_min_patches=16
+    n_steps=2048
+    n_min_patches=2048
     n_batch = n_envs * n_steps
     n_batch_critic = n_batch // n_min_patches #'''model parameter too'''
     
@@ -47,7 +47,7 @@ def main():
     frame_stack=2
     lam=0.95
     gamma=0.99
-    n_epochs=1000000
+    n_epochs=10000
     n_opt_epochs=4
     save_each=10
     log_interval=1

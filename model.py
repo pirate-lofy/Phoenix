@@ -107,7 +107,7 @@ class Model:
             file=files[-1]
             number=file.split('/')[-1]
             load(path+'/'+number)
-            return number
+            return int(number)
         
         
         
@@ -119,6 +119,7 @@ class Model:
         self.actor = actor
         self.save = save
         self.load = load
+        self.load_latest=load_latest
         
         tf.global_variables_initializer().run(session=sess)        
         

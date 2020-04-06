@@ -6,6 +6,11 @@ from runner import Runner
 from T_ppo2 import learn
 
 
+def constfn(val):
+    def f(_):
+        return val
+    return f
+
 def config():
     ncpu=4
     config = tf.ConfigProto(allow_soft_placement=True,
@@ -42,6 +47,12 @@ save_each=10
 log_interval=1
 lr=0.0003
 clip_range=0.1
+
+    
+if isinstance(lr, float): lr = constfn(lr)
+else: assert callable(lr)
+if isinstance(clip_range, float): clip_range = constfn(clip_range)
+else: assert callable(clip_range)
  
 model=Model(CnnPolicy,ob_img_space,ob_measure_space,ac_space,n_envs,
                 n_batch_critic,ent_coef,vf_coef,max_grad_norm,

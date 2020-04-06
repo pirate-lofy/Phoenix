@@ -6,10 +6,19 @@ import time
 from math import exp,sqrt
 from colorama import Fore
 
+#linux
 try:
     sys.path.append("carla-0.9.5-py3.5-linux-x86_64.egg")
 except IndexError:
-    print(Fore.YELLOW+'CarlaEnv log: cant append carla egg'+Fore.WHITE)
+    print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
+
+
+#windows
+# try:
+#     sys.path.append("carla-0.9.5-py3.7-win-amd64.egg")
+# except IndexError:
+#     print(Fore.YELLOW+'CarlaEnv log: cant append carla egg'+Fore.WHITE)
+
 
 
 import carla
@@ -37,7 +46,7 @@ class CarlaEnv:
     seg_data=None
 
     
-    def __init__(self,host='127.0.0.1', port=2000,timeout=100):
+    def __init__(self,host='127.0.0.1', port=2000,timeout=20):
         self.host=host
         self.port=port
         self.timeout=timeout
