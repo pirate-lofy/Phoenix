@@ -10,7 +10,7 @@ def safemean(xs):
     return np.nan if len(xs) == 0 else np.mean(xs)
 
 def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
-          clip_range,save_each,log_interval,lr):
+          clip_range,save_each,log_interval,lr,i=1):
     
     _ = sp.call('clear',shell=True)
     rond=0
@@ -22,7 +22,7 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
     n_updates = n_epochs//n_batch
     e_time=50
     
-    for update in range(1, n_updates+1):
+    for update in range(i, n_updates+1):
         s=time.time()
         assert n_batch % n_min_patches == 0
         
@@ -88,10 +88,19 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
                 shutil.rmtree(savepath)
             if not os.path.exists(savepath):
                 os.mkdir(savepath)
-            savepath = os.path.join(savepath, '%.5i'%update)
+            savepath = os.path.join(savepath,update)
             print('PPO2 log: Saving to', savepath)
-
             model.save(savepath)
+            
+        # # save model, colab version
+        # if save_each and (update%save_each==0 or update==1):
+        #     savepath='/home/Desktop/checkpoints'
+        #     if not os.path.exists(savepath):
+        #         os.mkdir(savepath)
+        #     filepath = os.path.join(savepath,update)
+        #     print('PPO@ log: Saving to',filepath)
+        #     model.save(filepath)
+        #     model.remove_old(savepath)
         
         
     print(Fore.Green+'PPO2 log: Training has ended.'+Fore.WHITE)

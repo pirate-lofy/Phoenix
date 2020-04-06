@@ -1,5 +1,7 @@
 import tensorflow as tf
 import joblib
+import glob
+import os
 
 class Model:
     def __init__(self,policy,ob_img_space,ob_measure_space,ac_space,
@@ -83,7 +85,14 @@ class Model:
         def save(save_path):
             ps = sess.run(params)
             joblib.dump(ps, save_path)
-
+                    
+        
+        def remove_old(savepath):
+            files=glob.glob(savepath+'/*')
+            if len(files)>5:
+                dummy_files=files[:len(files)-5]
+                for file in dummy_files:
+                    os.remove(file)            
 
         def load(load_path):
             loaded_params = joblib.load(load_path)
@@ -91,6 +100,16 @@ class Model:
             for p, loaded_p in zip(params, loaded_params):
                 restores.append(p.assign(loaded_p))
             sess.run(restores)
+        
+        
+        def load_latest(path):
+            files=glob.glob(path+'/*')
+            file=files[-1]
+            number=file.split('/')[-1]
+            load(path+'/'+number)
+            return number
+        
+        
         
         self.step = actor.step
         self.value = actor.value
@@ -100,7 +119,6 @@ class Model:
         self.actor = actor
         self.save = save
         self.load = load
-        self.log=log
         
         tf.global_variables_initializer().run(session=sess)        
         

@@ -6,7 +6,6 @@ from T_policies import CnnPolicy
 from model import Model
 from runner import Runner
 
-print('here')
 env=None
 
 from new_env import CarlaEnv
