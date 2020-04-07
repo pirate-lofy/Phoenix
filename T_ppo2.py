@@ -91,13 +91,12 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
             
         # save model, colab version
         if save_each and (update%save_each==0 or update==1):
-            savepath='/home/Desktop/checkpoints'
+            savepath='/home/colab/Desktop/checkpoints'
             if not os.path.exists(savepath):
                 os.mkdir(savepath)
-            filepath = os.path.join(savepath,update)
+            filepath = savepath+'/'+str(update)
             print('PPO@ log: Saving to',filepath)
             model.save(filepath)
-            model.remove_old(savepath)
         
         
     print(Fore.Green+'PPO2 log: Training has ended.'+Fore.WHITE)
