@@ -47,7 +47,7 @@ def main():
     frame_stack=2
     lam=0.95
     gamma=0.99
-    n_epochs=10000
+    n_epochs=10000000
     n_opt_epochs=4
     save_each=10
     log_interval=1
