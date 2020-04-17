@@ -1,5 +1,5 @@
-
 import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 from T_ppo2 import learn
 from T_policies import CnnPolicy
@@ -9,6 +9,7 @@ from runner import Runner
 env=None
 
 from new_env import CarlaEnv
+
 def config():
     ncpu=4
     config = tf.ConfigProto(allow_soft_placement=True,
@@ -41,7 +42,7 @@ def main():
     n_batch_critic = n_batch // n_min_patches #'''model parameter too'''
     
     '''numbers parameters according to the papper'''
-    ent_coef=0.01
+    ent_coef=0
     vf_coef=0.5
     max_grad_norm=0.5
     frame_stack=2

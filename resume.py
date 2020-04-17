@@ -1,11 +1,12 @@
-from new_env import CarlaEnv
+
 from model import Model
 from T_policies import CnnPolicy
 import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 from runner import Runner
 from T_ppo2 import learn
 
-
+from new_env import CarlaEnv
 def constfn(val):
     def f(_):
         return val
@@ -29,19 +30,19 @@ ac_space = env.action_space
 
 '''learn parameters'''
 n_envs = 1 # n_batch_actor
-n_steps=4
-n_min_patches=4
+n_steps=1024
+n_min_patches=1024
 n_batch = n_envs * n_steps
-n_batch_critic = n_batch // n_min_patches 
+n_batch_critic = n_batch // n_min_patches #'''model parameter too'''
 
 '''numbers parameters according to the papper'''
-ent_coef=0.01
+ent_coef=0
 vf_coef=0.5
 max_grad_norm=0.5
 frame_stack=2
 lam=0.95
 gamma=0.99
-n_epochs=1000000
+n_epochs=10000000
 n_opt_epochs=4
 save_each=10
 log_interval=1
