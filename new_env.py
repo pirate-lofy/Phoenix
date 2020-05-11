@@ -124,9 +124,9 @@ class CarlaEnv:
         img_gray=cv.resize(img_gray,(192,182),cv.INTER_AREA)/255.
         self.rgb_data=img_gray[:]
         
-        if self.SHOW_VIEW:
-            cv.imshow('front view',img)
-            cv.waitKey(1)
+#        if self.SHOW_VIEW:
+#            cv.imshow('front view',img)
+#            cv.waitKey(1)
         
     def _prepare_seg(self,img):
         res=np.zeros(img.shape)
