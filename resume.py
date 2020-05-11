@@ -59,7 +59,7 @@ model=Model(CnnPolicy,ob_img_space,ob_measure_space,ac_space,n_envs,
                 n_batch_critic,ent_coef,vf_coef,max_grad_norm,
                 frame_stack)
 
-path='/home/colab/Desktop/checkpoints'
+path='checkpoints'
 i=model.load_latest(path)
 runner=Runner(env,model,n_steps,gamma,lam)
 

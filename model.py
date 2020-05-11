@@ -103,11 +103,12 @@ class Model:
         
         
         def load_latest(path):
-            files=glob.glob(path+'/*')
+            files=glob.glob(path+'\\*')
             file=files[-1]
             number=file.split('/')[-1]
-            load(path+'/'+number)
-            return int(number)
+            load('checkpoints\\1340')
+#            return int(number)
+            return int(1340)
         
         
         
