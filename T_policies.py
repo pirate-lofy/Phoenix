@@ -6,8 +6,9 @@ from feature_extractor import impala_cnn
 
 def process_measurements(X_measurements):
     activ = tf.nn.relu
-    h=activ(fc(X_measurements, 'fc1_m', nh=8, init_scale=np.sqrt(2)))
-    return activ(fc(h, 'fc2_m', nh=4, init_scale=np.sqrt(2)))
+#    h=activ(fc(X_measurements, 'fc1_m', nh=8, init_scale=np.sqrt(2)))
+#    return activ(fc(h, 'fc2_m', nh=4, init_scale=np.sqrt(2)))
+    return activ(fc(X_measurements, 'fc1_m', nh=10, init_scale=np.sqrt(2)))
 
 class CnnPolicy():
 
@@ -29,14 +30,14 @@ class CnnPolicy():
             
             ''' policy model branch '''
             pi=tf.nn.relu(fc(h_concat,'policy_branch_1',64,init_scale=np.sqrt(2)))
-            pi=tf.nn.relu(fc(pi,'policy_branch_2',16,init_scale=np.sqrt(2)))
+#            pi=tf.nn.relu(fc(pi,'policy_branch_2',16,init_scale=np.sqrt(2)))
             pi = fc(pi, 'pi', n_actions, init_scale=0.01)
             
             logstd = tf.get_variable(name="logstd", shape=[1, n_actions], initializer=tf.zeros_initializer())
             
             ''' value branch '''
             vf= tf.nn.relu(fc(h_concat,'value_branch_1',32,init_scale=np.sqrt(2)))
-            vf= tf.nn.relu(fc(vf,'value_branch_2',8,init_scale=np.sqrt(2)))
+#            vf= tf.nn.relu(fc(vf,'value_branch_2',8,init_scale=np.sqrt(2)))
             vf = fc(vf, 'v', 1)[:,0]
         
         pdparam = tf.concat([pi,logstd], axis=1)

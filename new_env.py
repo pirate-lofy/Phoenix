@@ -7,18 +7,17 @@ from math import exp,sqrt
 from colorama import Fore
 
 #linux
-try:
-    sys.path.append("carla-0.9.5-py3.5-linux-x86_64.egg")
-except IndexError:
-    print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
+#try:
+#    sys.path.append("carla-0.9.5-py3.5-linux-x86_64.egg")
+#except IndexError:
+#    print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
 
 
 #windows
-# try:
-#     sys.path.append("carla-0.9.5-py3.7-win-amd64.egg")
-# except IndexError:
-#     print(Fore.YELLOW+'CarlaEnv log: cant append carla egg'+Fore.WHITE)
-
+try:
+    sys.path.append("carla-0.9.5-py3.7-win-amd64.egg")
+except IndexError:
+    print(Fore.YELLOW+'CarlaEnv log: cant append carla egg'+Fore.WHITE)
 
 
 import carla
@@ -31,7 +30,7 @@ class CarlaEnv:
     callibaration_shape=(182,192)
     callibarationRGB_shape=(182,192,2)
     
-    n_actions=3
+    n_actions=2
     stand=300
     stand_limit=300
     actors=[]
@@ -125,9 +124,9 @@ class CarlaEnv:
         img_gray=cv.resize(img_gray,(192,182),cv.INTER_AREA)/255.
         self.rgb_data=img_gray[:]
         
-#        if self.SHOW_VIEW:
-#            cv.imshow('front view',img)
-#            cv.waitKey(1)
+        if self.SHOW_VIEW:
+            cv.imshow('front view',img)
+            cv.waitKey(1)
         
     def _prepare_seg(self,img):
         res=np.zeros(img.shape)
@@ -298,13 +297,11 @@ class CarlaEnv:
         actions=actions[0]
         steer=np.clip(actions[0],-1,1).astype(np.float32)
         throttle=np.clip(actions[1],0,1).astype(np.float32)
-        brake=np.clip(actions[2],0,1).astype(np.float32)
         
         steer=steer.item()
         throttle=throttle.item()
-        brake=brake.item()
         
-        control=carla.VehicleControl(throttle,steer,brake)
+        control=carla.VehicleControl(throttle,steer,0)
         self.vehicle.apply_control(control)
         data,measures=self._get_data()
         reward=self._compute_reward(measures)
