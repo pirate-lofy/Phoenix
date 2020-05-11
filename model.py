@@ -1,7 +1,7 @@
 import tensorflow as tf
 import joblib
 import os 
-from tensorboardX import SummaryWriter
+
 
 class Model:
     def __init__(self,policy,ob_img_space,ob_measure_space,ac_space,
@@ -10,7 +10,6 @@ class Model:
         
         sess=tf.get_default_session()
         
-        writer = SummaryWriter(logdir='log')
         
         actor = policy(sess, ob_img_space, ob_measure_space,ac_space)
         critic = policy(sess, ob_img_space, ob_measure_space,ac_space,reuse=True)
@@ -70,15 +69,7 @@ class Model:
                 [pg_loss, vf_loss, entropy, approxkl, clipfrac, _train],
                 td_map
             )[:-1]
-            
 
-        def log(itr):
-            writer.add_scalar("loss", loss,itr)
-            print('log1')
-            writer.add_scalar('actor mean',actor.pi,itr)
-            writer.add_scalar('value',actor.vf,itr)
-            writer.add_scalar("loss", loss,itr)
-            writer.add_scalar("entropy",entropy,itr)
 
         def save(save_path):
             ps = sess.run(params)
