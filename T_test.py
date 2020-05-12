@@ -39,7 +39,7 @@ model=Model(CnnPolicy,ob_img_space,ob_measure_space,ac_space,n_envs,
                 n_batch_critic,ent_coef,vf_coef,max_grad_norm,
                 frame_stack)
 
-model.load('checkpoints\\1340')
+model.load('checkpoints\\160')
 
 i,m=env.reset()
 i=np.expand_dims(i,0)
@@ -49,3 +49,5 @@ for _ in range(10000):
     i,m,reward,done,_=env.step(actions)
     i=np.expand_dims(i,0)
     m=np.expand_dims(m,0)
+    if done:
+        env.reset()
