@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from baselines.a2c.utils import fc
 from baselines.common.distributions import make_proba_dist_type
-from feature_extractor import impala_cnn
+from feature_extractor import impala_cnn,nature_cnn
 
 def process_measurements(X_measurements):
     activ = tf.nn.relu
@@ -22,7 +22,7 @@ class CnnPolicy():
         X_measurements = tf.placeholder(tf.float32, shape=measures_shape,name='measures')
 
         with tf.variable_scope("model", reuse=reuse):
-            h = tf.cast(impala_cnn(X), tf.float32, name='cast_1')
+            h = tf.cast(nature_cnn(X), tf.float32, name='cast_1')
             h_measurements = tf.cast(process_measurements(X_measurements), tf.float32, name='cast_2')
             
             h_concat = tf.concat([h, h_measurements], axis=1, name='concat_1')
