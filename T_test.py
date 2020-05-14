@@ -39,7 +39,7 @@ model=Model(CnnPolicy,ob_img_space,ob_measure_space,ac_space,n_envs,
                 n_batch_critic,ent_coef,vf_coef,max_grad_norm,
                 frame_stack)
 
-model.load('checkpoints\\160')
+model.load('checkpoints\\410')
 
 i,m=env.reset()
 i=np.expand_dims(i,0)

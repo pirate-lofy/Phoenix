@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from baselines.a2c.utils import fc
 from baselines.common.distributions import make_proba_dist_type
-from feature_extractor import impala_cnn,nature_cnn
+from feature_extractor import impala_cnn
 
 def process_measurements(X_measurements):
     activ = tf.nn.relu
@@ -14,18 +14,21 @@ class CnnPolicy():
 
     # TODO: replace the fixed logstd with dynamic one
     # TODO: try to use Embedding layer (or not)
-    def __init__(self, sess, ob_img_space, ob_measure_space, ac_space, reuse=False): #pylint: disable=W0613
+    def __init__(self, sess, ob_img_space, ob_measure_space, ob_hl_space, ac_space, reuse=False): #pylint: disable=W0613
         ob_img_shape=(None,*ob_img_space.shape)
         measures_shape = (None,ob_measure_space.shape[0])
+        hl_shape=(None,ob_hl_space.shape[0])
         n_actions = ac_space.shape[0]
         X = tf.placeholder(tf.float32, ob_img_shape,name='X') #obs
         X_measurements = tf.placeholder(tf.float32, shape=measures_shape,name='measures')
+        X_hl_command =tf.placeholder(tf.float32,shape=hl_shape,name='hl_command')
 
         with tf.variable_scope("model", reuse=reuse):
-            h = tf.cast(nature_cnn(X), tf.float32, name='cast_1')
+            h = tf.cast(impala_cnn(X), tf.float32, name='cast_1')
             h_measurements = tf.cast(process_measurements(X_measurements), tf.float32, name='cast_2')
+            h_hl=tf.cast(X_hl_command,tf.float32)
             
-            h_concat = tf.concat([h, h_measurements], axis=1, name='concat_1')
+            h_concat = tf.concat([h, h_measurements,h_hl], axis=1, name='concat_1')
             h_concat=tf.nn.relu(fc(h_concat, 'after_conc_layer',128,init_scale=np.sqrt(2)))
             
             ''' policy model branch '''
@@ -49,15 +52,16 @@ class CnnPolicy():
         neglogp0 = self.pd.neglogp(a0)
         self.initial_state = None
 
-        def step(ob_img, ob_measure):
-            a, v, neglogp = sess.run([a0, vf, neglogp0], {X:ob_img, X_measurements:ob_measure})
+        def step(ob_img, ob_measure,ob_hl):
+            a, v, neglogp = sess.run([a0, vf, neglogp0], {X:ob_img, X_measurements:ob_measure,X_hl_command:ob_hl})
             return a, v, neglogp
 
-        def value(ob_img, ob_measure):
-            return sess.run(vf, {X:ob_img, X_measurements:ob_measure})
+        def value(ob_img, ob_measure,ob_hl):
+            return sess.run(vf, {X:ob_img, X_measurements:ob_measure,X_hl_command:ob_hl})
 
         self.X = X
         self.X_measurements = X_measurements
+        self.X_hl_command=X_hl_command
         self.pi = pi
         self.vf = vf
         self.step = step
