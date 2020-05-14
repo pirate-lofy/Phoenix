@@ -4,14 +4,14 @@ import glob
 import os
 
 class Model:
-    def __init__(self,policy,ob_img_space,ob_measure_space,ac_space,
+    def __init__(self,policy,ob_img_space,ob_measure_space,hl_space,ac_space,
                  n_batch_act,n_batch_critic,ent_coef,vf_coef,
                  max_grad_norm,frame_stack):
         
         sess=tf.get_default_session()
         
-        actor = policy(sess, ob_img_space, ob_measure_space,ac_space)
-        critic = policy(sess, ob_img_space, ob_measure_space,ac_space,reuse=True)
+        actor = policy(sess, ob_img_space, ob_measure_space,hl_space,ac_space)
+        critic = policy(sess, ob_img_space, ob_measure_space,hl_space,ac_space,reuse=True)
         
         
         '''-----------------------------------------'''
@@ -55,14 +55,15 @@ class Model:
         
         self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
         
-        def train(lr, cliprange, img_obs, measure_obs, returns, masks, actions, values, neglogpacs, states=None):
+        def train(lr, cliprange, img_obs, measure_obs, hl_obs,returns, masks, actions, values, neglogpacs, states=None):
             # step 3
             advs = returns - values
             advs = (advs - advs.mean()) / (advs.std() + 1e-8)
             
             td_map = {
-                    critic.X:img_obs,
+                      critic.X:img_obs,
                       critic.X_measurements:measure_obs, 
+                      critic.X_hl_command:hl_obs,
                       A:actions, 
                       ADV:advs, 
                       R:returns, 
@@ -72,6 +73,7 @@ class Model:
                       OLDVPRED:values
                       }
             
+#            print('$$$$$$$$$$$$$$$$$$$ here')
             if states is not None:
                 td_map[critic.S] = states
                 td_map[critic.M] = masks

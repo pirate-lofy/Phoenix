@@ -2,7 +2,6 @@ from baselines import logger
 import time
 import numpy as np
 import os
-import shutil
 from colorama import Fore
 import subprocess as sp
 
@@ -33,7 +32,7 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
         # step 1 in the algorithm
         # collect N transactions
         print(Fore.GREEN+'PPO2 log: runner cycle'+Fore.WHITE)
-        img_obs, measure_obs, returns, masks, actions_list, values, neglogpacs = runner.run() #pylint: disable=E0632
+        img_obs, measure_obs, hl_obs,returns, masks, actions_list, values, neglogpacs = runner.run() #pylint: disable=E0632
 
         mblossvals = []
         
@@ -51,7 +50,7 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
             for start in range(0, n_batch, n_batch_critic):
                 end = start + n_batch_critic
                 mbinds = inds[start:end]
-                slices = (arr[mbinds] for arr in (img_obs, measure_obs, returns, masks, actions_list, values, neglogpacs))
+                slices = (arr[mbinds] for arr in (img_obs, measure_obs, hl_obs,returns, masks, actions_list, values, neglogpacs))
                 mblossvals.append(model.train(lrnow, cliprangenow, *slices))
                 #print(Fore.GREEN+'PPO2 log: logging summaries'+Fore.WHITE)
                 #model.log(rond)
@@ -64,8 +63,9 @@ def learn(model,runner,n_epochs,n_steps,n_min_patches,n_opt_epochs,n_batch,
         lossvals = np.mean(mblossvals, axis=0)
         tnow = time.time()
         fps=n_batch/(tnow-tstart)
+#        print('$$$$$$$$$$ here')
         
-        # log to print results
+#         log to print results
         if update % log_interval == 0 or update == 1:
             logger.logkv("epoch", update)
             logger.logkv("serial_timesteps", update*n_steps)
