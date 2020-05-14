@@ -3,3 +3,5 @@ carla/__pycache__/*.pyc
 checkpoints/
 log/
 logs/
+logs_now/
+carla-0.9.5-py3.5-linux-x86_64.egg
