@@ -6,12 +6,13 @@ import time
 from math import exp,sqrt
 from colorama import Fore
 
-#linux
+
+##linux
+
 #try:
 #    sys.path.append("carla-0.9.5-py3.5-linux-x86_64.egg")
 #except IndexError:
 #    print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
-
 
 #windows
 try:
@@ -23,7 +24,9 @@ except IndexError:
 
 import carla
 from carla import ColorConverter as cc
-
+from navigation.global_route_planner import GlobalRoutePlanner
+from navigation.global_route_planner_dao import GlobalRoutePlannerDAO
+import navigation.misc as misc
 import cv2 as cv
 
 class CarlaEnv:
@@ -31,7 +34,7 @@ class CarlaEnv:
     callibaration_shape=(182,192)
     callibarationRGB_shape=(182,192,2)
     
-    n_actions=3
+    n_actions=2
     stand=300
     stand_limit=300
     actors=[]
@@ -40,19 +43,21 @@ class CarlaEnv:
     is_goal=None
     bad_pos=None
     reset_timer=0
-    
+    wait=300
+    c=0
     rgb_data=None
     seg_data=None
 
     
-    def __init__(self,host='127.0.0.1', port=2000,timeout=100):
+    def __init__(self,host='127.0.0.1', port=2000,timeout=20):
         self.host=host
         self.port=port
         self.timeout=timeout
         
         self.observation_space = spaces.Tuple(
             (spaces.Box(0, 255, self.callibarationRGB_shape), 
-            spaces.Box(-np.inf, np.inf, (5,))
+            spaces.Box(-np.inf, np.inf, (5,)),
+            spaces.Box(0,1, (4,))
             )
         )
         self.action_space = spaces.Box(-1, 1, shape=(
@@ -61,6 +66,9 @@ class CarlaEnv:
         self.blueprint=self._connect()
         self.vehicle=self._add_vehicle(self.blueprint)
         self._add_actors()
+        gpDAO=GlobalRoutePlannerDAO(self.map)
+        self.gp=GlobalRoutePlanner(gpDAO)
+        self.gp.setup()
     
     def _connect(self):
         self.client = carla.Client(self.host,self.port)
@@ -165,8 +173,7 @@ class CarlaEnv:
         self.reset_timer+=1
 
     
-    def _empty_cycle(self):
-        time.sleep(2)
+    def _initialize_position(self):
         self.vehicle.apply_control(carla.VehicleControl(brake=0.0, throttle=0.0))
         transform = random.choice(self.map.get_spawn_points())
         self.vehicle.set_transform(transform)
@@ -178,6 +185,17 @@ class CarlaEnv:
         sp=np.array([self.start_loc.x,self.start_loc.y])
         gp=np.array([self.goal_loc.x,self.goal_loc.y])
         self.dist_from_start_to_end=np.linalg.norm(sp-gp)
+        
+        self.route=self.gp.trace_route(self.start_loc,self.goal_loc)
+        self.c=0
+        
+        time.sleep(2)
+    
+    def _empty_cycle(self):
+        print(Fore.YELLOW+'CarlaEnv log: empty cycle'+Fore.WHITE)
+        for _ in  range(self.wait):
+            self.step([[0.,0.,0.]])
+        print(Fore.YELLOW+'CarlaEnv log: empty cycle ended'+Fore.WHITE)
     
     def _get_vector_value(self,vec):
         return sqrt(vec.x**2+vec.y**2)
@@ -195,14 +213,13 @@ class CarlaEnv:
         loc=transform.location
         dist_from_start=loc.distance(self.start_loc)
         dist_to_goal=loc.distance(self.goal_loc)
-        
+
         dif=self._compute_dif_between_positions(loc)
         self._update_stand(dif)
         
         colls=0
         for col in self.collision_data:
             colls+=self._get_vector_value(col.normal_impulse)
-        
         return np.array([speed,acc,dist_from_start,dist_to_goal,colls])
     
     
@@ -217,7 +234,8 @@ class CarlaEnv:
     def _get_data(self):
         data=self._get_images_data()
         measures=self._get_measures()
-        return data,measures
+        hl_command=self.get_hl_command()
+        return data,measures,hl_command
 
 
     def _is_goal(self,dist):
@@ -257,10 +275,28 @@ class CarlaEnv:
             self.stand-=1
     '''----------------'''
 
+    '''
+    VOID = 0
+    LEFT = 1
+    RIGHT = 2
+    STRAIGHT = 3
+    '''
+
+    def get_hl_command(self):
+        cl=self.vehicle.get_location()
+        direction=self.gp.abstract_route_plan(cl,self.goal_loc)[0].value        
+        if direction==-1:
+            direction=0
+        if direction==5 or direction==6 or direction==4:
+            direction=3
+        directions_vector=np.zeros((4,))
+        directions_vector[direction]=1
+        return directions_vector
     
     def _compute_reward(self,measures):
         speed,acc,dist_from_start,dist_to_goal,colls=\
-        measures[0],measures[1],measures[2],measures[3],measures[4]
+            measures[0],measures[1],measures[2],measures[3],measures[4]
+        
         if self._is_goal(dist_to_goal):
             self.is_goal=True
             return 100
@@ -268,12 +304,14 @@ class CarlaEnv:
             self.bad_pos=True
             return -100
         alpha=0.1
-        reward= alpha*(exp(speed)-exp(acc)+dist_from_start-dist_to_goal)
+        reward= alpha*(exp(speed)+dist_from_start-dist_to_goal)
+#        print('reward= ',reward)
         return reward
 
 
     def _is_done(self,colls,dist_to_goal):
 #        print('goal= ',self.is_goal,' bad= ',self.bad_pos)
+#        print(self.is_goal,self.bad_pos)
         return self.is_goal or self.bad_pos
 
     
@@ -281,27 +319,30 @@ class CarlaEnv:
     def reset(self):
         print(Fore.YELLOW+'CarlaEnv log: reset for the {0} time'.format(self.reset_timer)+Fore.WHITE)
         self._clear_history()
-        self._empty_cycle()
+        self._initialize_position()
         self._init_stand()
-        data,measures=self._get_data()
-        return data,measures
+#        self._empty_cycle()
+        data,measures,hl_command=self._get_data()
+        return data,measures,hl_command
     
     def step(self,actions):
         actions=actions[0]
         steer=np.clip(actions[0],-1,1).astype(np.float32)
         throttle=np.clip(actions[1],0,1).astype(np.float32)
-        brake=np.clip(actions[2],0,1).astype(np.float32)
         
         steer=steer.item()
         throttle=throttle.item()
-        brake=brake.item()
-        
-        control=carla.VehicleControl(throttle,steer,brake)
+        control=carla.VehicleControl(throttle,steer,0)
+#        control=carla.VehicleControl(0.3,0,0)
         self.vehicle.apply_control(control)
-        data,measures=self._get_data()
+        data,measures,hl_command=self._get_data()
         reward=self._compute_reward(measures)
         done=self._is_done(measures[4],measures[3])
-        return data,measures,reward,done,{}
+#        self.log(measures)
+        return data,measures,hl_command,reward,done,{}
+    
+    def dead_command(self):
+        self.step([[0.,0.,0.]])
     
     def destroy(self):
         for actor in self.actors:

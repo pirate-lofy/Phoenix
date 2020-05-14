@@ -1,18 +1,18 @@
 import tensorflow as tf
 import joblib
-import os 
-
+import glob
+import os
 
 class Model:
-    def __init__(self,policy,ob_img_space,ob_measure_space,ac_space,
+    def __init__(self,policy,ob_img_space,ob_measure_space,hl_space,ac_space,
                  n_batch_act,n_batch_critic,ent_coef,vf_coef,
                  max_grad_norm,frame_stack):
         
         sess=tf.get_default_session()
         
+        actor = policy(sess, ob_img_space, ob_measure_space,hl_space,ac_space)
+        critic = policy(sess, ob_img_space, ob_measure_space,hl_space,ac_space,reuse=True)
         
-        actor = policy(sess, ob_img_space, ob_measure_space,ac_space)
-        critic = policy(sess, ob_img_space, ob_measure_space,ac_space,reuse=True)
         
         '''-----------------------------------------'''
         A = critic.pdtype.sample_placeholder([None])
@@ -41,7 +41,7 @@ class Model:
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
-        '''-----------------------------------------'''
+        '''-----------------------------------------'''        
         
         with tf.variable_scope('model'):
             params = tf.trainable_variables()
@@ -55,26 +55,46 @@ class Model:
         
         self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
         
-        def train(lr, cliprange, img_obs, measure_obs, returns, masks, actions, values, neglogpacs, states=None):
+        def train(lr, cliprange, img_obs, measure_obs, hl_obs,returns, masks, actions, values, neglogpacs, states=None):
             # step 3
             advs = returns - values
             advs = (advs - advs.mean()) / (advs.std() + 1e-8)
             
-            td_map = {critic.X:img_obs,critic.X_measurements:measure_obs, A:actions, ADV:advs, R:returns, LR:lr,
-                    CLIPRANGE:cliprange, OLDNEGLOGPAC:neglogpacs, OLDVPRED:values}
+            td_map = {
+                      critic.X:img_obs,
+                      critic.X_measurements:measure_obs, 
+                      critic.X_hl_command:hl_obs,
+                      A:actions, 
+                      ADV:advs, 
+                      R:returns, 
+                      LR:lr,
+                      CLIPRANGE:cliprange, 
+                      OLDNEGLOGPAC:neglogpacs, 
+                      OLDVPRED:values
+                      }
+            
+#            print('$$$$$$$$$$$$$$$$$$$ here')
             if states is not None:
                 td_map[critic.S] = states
                 td_map[critic.M] = masks
+            
             return sess.run(
                 [pg_loss, vf_loss, entropy, approxkl, clipfrac, _train],
                 td_map
             )[:-1]
-
+            
 
         def save(save_path):
             ps = sess.run(params)
             joblib.dump(ps, save_path)
-
+                    
+        
+        def remove_old(savepath):
+            files=glob.glob(savepath+'/*')
+            if len(files)>5:
+                dummy_files=files[:len(files)-5]
+                for file in dummy_files:
+                    os.remove(file)            
 
         def load(load_path):
             loaded_params = joblib.load(load_path)
@@ -83,7 +103,17 @@ class Model:
                 restores.append(p.assign(loaded_p))
             sess.run(restores)
         
-            
+        
+        def load_latest(path):
+            files=glob.glob(path+'\\*')
+            file=files[-1]
+            number=file.split('/')[-1]
+            load('checkpoints\\1340')
+#            return int(number)
+            return int(1340)
+        
+        
+        
         self.step = actor.step
         self.value = actor.value
         self.initial_state = actor.initial_state
@@ -92,8 +122,6 @@ class Model:
         self.actor = actor
         self.save = save
         self.load = load
-        self.log=log
+        self.load_latest=load_latest
         
         tf.global_variables_initializer().run(session=sess)        
-        
-        
