@@ -1,25 +1,4 @@
 import tensorflow as tf
-#from keras.layers import Embedding
-import numpy as np
-from baselines.a2c.utils import conv, fc, conv_to_fc
-
-def nature_cnn(unscaled_images):
-    """
-    CNN from Nature paper.
-    """
-    scaled_images = tf.cast(unscaled_images, tf.float32)
-    activ = tf.nn.relu
-    h = activ(conv(scaled_images, 'c1', n_filters=32, filter_size=8, stride=4, init_scale=np.sqrt(2)))
-    h2 = activ(conv(h, 'c2', n_filters=64, filter_size=4, stride=2, init_scale=np.sqrt(2)))
-    h3 = activ(conv(h2, 'c3', n_filters=64, filter_size=3, stride=1, init_scale=np.sqrt(2)))
-    h3 = conv_to_fc(h3)
-    return activ(fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2)))
-
-
-
-#def embidding(x):
-#    return Embedding(7,1)(x)
-
 
 def impala_cnn(unscaled_images, depths=[16,32,32]):
     layer_num = 0
