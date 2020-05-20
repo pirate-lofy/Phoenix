@@ -1,164 +1,303 @@
-from carla.client import CarlaClient
-from carla.settings import CarlaSettings
-from carla.sensor import Camera
-from carla.tcp import TCPConnectionError
-from carla.image_converter import labels_to_cityscapes_palette
-from carla.planner.planner import Planner
-
-from seg.segmentator import Segmentator
+import sys
+import gym
 from gym import spaces
-
-import random
-import cv2 as cv
 import numpy as np
+import random
+import time
+from math import exp,sqrt
+from colorama import Fore
 
-import matplotlib.pyplot as plt
+#linux
+try:
+    sys.path.append("carla-0.9.5-py3.5-linux-x86_64.egg")
+except IndexError:
+    print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
 
-# TODO: add segmentator
-# TODO: replace the baselines with the one u make
+#
+ #windows
+#try:
+#    sys.path.append("carla-0.9.5-py3.7-win-amd64.egg")
+#except IndexError:
+#    print(Fore.YELLOW+'CarlaEnv log: cant append carla egg'+Fore.WHITE)
 
-class CarlaEnv:
-    n_vehicles=40
-    n_peds=350
-    n_actions=3
-    
-    
-    # we get all kinds of cameras and choose between them later
-    cameras=['rgb','seg']   
-    
+
+import carla
+from carla import ColorConverter as cc
+from navigation.global_route_planner import GlobalRoutePlanner
+from navigation.global_route_planner_dao import GlobalRoutePlannerDAO
+from navigation.misc import draw_waypoints
+import cv2 as cv
+
+class CarlaEnv(gym.Env):
+    # initial variables
     callibaration_shape=(182,192)
-    callibarationRGB_shape=(182,192,len(cameras))
+    callibarationRGB_shape=(182,192,2)
+    measures_shape=(5,)
+    hl_command_shape=(7,)
     
-    
-    wait=15
+    commands=['VOID','LEFT','RIGHT' ,'STRAIGHT','LANEFOLLOW','CHANGELANELEFT', 'CHANGELANERIGHT']
     num_envs=1
-    
+    n_actions=2
     stand=300
     stand_limit=300
-    
-    resetings=0 
+    actors=[]
+    collision_data=[]
+    SHOW_VIEW=True
+    is_goal=None
+    bad_pos=None
+    reset_timer=0
+    wait=300
+    c=0
+    rgb_data=None
+    seg_data=None
+    checkpoint=None
 
+    metadata = {'render.modes': ['human']}
     
-    def __init__(self,host='localhost',port=2000, repeat_frames=1,town_name='Town01'):
-        self.repeat_frames=repeat_frames
+    def __init__(self,host='127.0.0.1', port=2000,timeout=20):
+        super(CarlaEnv,self).__init__()
+    
+        self.host=host
+        self.port=port
+        self.timeout=timeout
         
-        self.observation_space = spaces.Tuple(
-            (spaces.Box(0, 255, self.callibarationRGB_shape), 
-            spaces.Box(-np.inf, np.inf, (5,))
-            )
-        )
+#        self.observation_space = spaces.Tuple(
+#            (spaces.Box(0, 255, self.callibarationRGB_shape), 
+#            spaces.Box(-np.inf, np.inf, (5,)),
+#            spaces.Box(0,1, (4,))
+#            )
+#        )
+        self.observation_space=spaces.Box(0, 255, self.callibarationRGB_shape)
+        self.measures_space=spaces.Box(-np.inf,np.inf, self.measures_shape)
+        self.hl_command_space=spaces.Box(0, 1, self.hl_command_shape)
         self.action_space = spaces.Box(-1, 1, shape=(
                 self.n_actions,))
         
-        self.planner=Planner(town_name)
-        self.segmentator=Segmentator()
-        
-        self.settings=self._get_settings(
-                self.n_vehicles,self.n_peds)
-        self._add_cameras()
-        
-        self._connect(host,port)
-        self.scene=self.client.load_settings(self.settings)
+        self.blueprint=self._connect()
+        self.vehicle=self._add_vehicle(self.blueprint)
+        self._add_actors()
+        self.gpDAO=GlobalRoutePlannerDAO(self.map)
+        self.gp=GlobalRoutePlanner(self.gpDAO)
+        self.gp.setup()
     
-    def _connect(self,host,port):
-        while True:
-            try:
-                self.client = CarlaClient(host, port,2000000)
-                self.client.connect()
-                print('CarlaEnv log: client connected successfully.')
-                break
-            except TCPConnectionError:
-                print('''CarlaEnv log: Client can not connect to the server..
-                      Server may not launched yet...''')
-        
-    def reset(self):
-        self.resetings+=1
-        print('CarlaEnv log: reseting the world for the {} time'.format(self.resetings))
-        print('CarlaEnv log: starting a new session..')
-        self._start_new_episod()
-        
-        # just to wait until the car falls from the sky and
-        # becomes ready 
-        # may prevent the collision sensor from recording 
-        # falling as collision
-        self._empty_cycle()
-        
-        data,measures=self._get_data(reset=True)
-        return data,measures
+    def _connect(self):
+        self.client = carla.Client(self.host,self.port)
+        self.client.set_timeout(self.timeout)
+        self.world = self.client.get_world()
+        settings = self.world.get_settings()
+        settings.no_rendering_mode = False
+        self.world.apply_settings(settings)
+        self.map=self.world.get_map()
+        print(Fore.YELLOW+'CarlaEnv log: client connected'+Fore.WHITE)
+        return self.world.get_blueprint_library()
     
-    def step(self,actions):
-        actions=actions[0]
-        steer=np.clip(actions[0],-1,1)
-        throttle=np.clip(actions[1],0,1)
-        brake=np.clip(actions[2],0,1)
+    def _add_vehicle(self,blueprint):
+        car = blueprint.filter('isetta')[0]
+        transform = random.choice(self.map.get_spawn_points())
+        vehicle = self.world.spawn_actor(car, transform)        
+        self.actors.append(vehicle)
+        return vehicle
 
-        # remember: Carla needs to get_data once and followed
-        # by send_control
-        # getting data twice in row causes craching
-        for _ in range(self.repeat_frames):
-            self.client.send_control(
-                    steer=steer,
-                    throttle=throttle,
-                    brake=brake,
-                    hand_brake=False,
-                    reverse=False                
-                    )
-            data,measures=self._get_data()
-        self.client.send_control(
-                    steer=steer,
-                    throttle=throttle,
-                    brake=brake,
-                    hand_brake=False,
-                    reverse=False                
-                    )
+
+    def _add_actors(self):
+        transform = carla.Transform(carla.Location(x=0.30, y=0, z=1.30),
+                                    carla.Rotation(pitch=0, yaw=0, roll=0))
+        # rgb cam
+        rgb = self.blueprint.find('sensor.camera.rgb')
+        rgb.set_attribute('image_size_x', '896')
+        rgb.set_attribute('image_size_y', '512')
+        rgb.set_attribute('fov', '110')
+        rgb = self.world.spawn_actor(rgb, transform, attach_to=self.vehicle)
+        rgb.listen(lambda data: self._process_rgb(data))
+        self.actors.append(rgb)
         
-        # speed,dist_to_goal,dist_from_start,colls,inters
-        data,measures=self._get_data()
+        # segmentation cam
+        seg = self.blueprint.find('sensor.camera.semantic_segmentation')
+        seg.set_attribute('image_size_x', '896')
+        seg.set_attribute('image_size_y', '512')
+        seg.set_attribute('fov', '110')
+        seg = self.world.spawn_actor(seg, transform, attach_to=self.vehicle)
+        seg.listen(lambda data: self._process_seg(data))
+        self.actors.append(seg)
         
-        reward=self._compute_reward(measures)
-        done=self._is_done(measures)
-        return data,measures,reward,done,{}
+        # collision
+        col= self.blueprint.find('sensor.other.collision')
+        col = self.world.spawn_actor(col, transform, attach_to=self.vehicle)
+        col.listen(lambda data,: self._detect_col(data))
+        self.actors.append(col)
     
+    def _to_gray(self,img):
+        return img[:,:,0]*0.299+img[:,:,1]*0.587+img[:,:,2]*0.114
+    
+    def _prepare_raw_image(self,image,to_gray=True):
+        img=np.array(image.raw_data)
+        img=img.reshape((512,896,4))[:,:,:3]
+        
+        if to_gray:
+            img_gray=self._to_gray(img)
+            return img,img_gray
+        else:
+            return img
+    
+    def _process_rgb(self,image):
+        img,img_gray=self._prepare_raw_image(image)
+        img_gray=img_gray[:350,:]
+        img_gray=cv.resize(img_gray,(192,182),cv.INTER_AREA)/255.
+        self.rgb_data=img_gray[:]
+        
+        if self.SHOW_VIEW:
+            cv.imshow('front view',img)
+            cv.waitKey(1)
+        
+    def _prepare_seg(self,img):
+        res=np.zeros(img.shape)
+        
+        mask1=img==[157, 234, 50]
+        mask2=img==[128, 64, 128]
+        mask=np.logical_or(mask1,mask2)
+        res[mask]=1
+        res[np.logical_not(mask)]=0
+        r=res>0
+        r2=res<255
+        res[np.logical_and(r,r2)]=255
+        res=self._to_gray(res)[:350,:]
+        return res
+    
+    def _process_seg(self, image):
+        image.convert(cc.CityScapesPalette)
+        i3=np.array(image.raw_data)
+        i3 = i3.reshape((512,896,4))[:,:,:3]
+        i3=self._prepare_seg(i3)
+#        if self.SHOW_VIEW:
+#            cv.imshow("",i3)
+#            cv.waitKey(1)
+        res=cv.resize(i3,(192,182),cv.INTER_AREA)/255.
+        self.seg_data=res[:]
+
+        
+    def _detect_col(self,data):
+        self.collision_data.append(data)
+        
+    
+    def _clear_history(self):
+        self.collision_data=[]
+        self.is_goal=False
+        self.bad_pos=False
+        self.reset_timer+=1
+
+
+    def get_waypoints(self,route):
+        waypoints=[]
+        for i in route:
+            point=self.gp._graph.nodes[i]['vertex']
+            point=carla.Location(*point)
+            point=self.gpDAO.get_waypoint(point)
+            waypoints.append(point)
+        return waypoints
+        
+    def _initialize_position(self):
+        self.vehicle.apply_control(carla.VehicleControl(brake=0.0, throttle=0.0))
+        transform = random.choice(self.map.get_spawn_points())
+        self.vehicle.set_transform(transform)
+        time.sleep(2)
+        self.start_loc=self.vehicle.get_location()
+        self.prev_pos=self.start_loc
+        
+        wp = random.choice(self.map.get_spawn_points())
+        self.goal_loc=wp.location
+        sp=np.array([self.start_loc.x,self.start_loc.y])
+        gp=np.array([self.goal_loc.x,self.goal_loc.y])
+        self.dist_from_start_to_end=np.linalg.norm(sp-gp)
+        
+        self.route=self.gp._path_search(self.start_loc,self.goal_loc)
+        self.waypoints=self.get_waypoints(self.route)
+#        self.draw_path(self.waypoints)
+        self.c=0
+        
     
     def _empty_cycle(self):
-        print('CarlaEnv log: empty cycle started...')
-        for _ in range(self.wait):
-            self.client.read_data()
-            self.client.send_control(
-                steer=0,
-                throttle=0,
-                brake=0,
-                hand_brake=False,
-                reverse=False                
-                )
-        print('CarlaEnv log: empty cycle ended.\n')
+        print(Fore.YELLOW+'CarlaEnv log: empty cycle'+Fore.WHITE)
+        for _ in  range(self.wait):
+            self.step([[0.,0.,0.]])
+        print(Fore.YELLOW+'CarlaEnv log: empty cycle ended'+Fore.WHITE)
     
-    def _is_done(self,measures):
-        dist=measures[1]
-        goal=self._is_goal(dist)
-        bad=self._is_bad_pos(measures)
-        return goal or bad
-                
-    #speed,dist_to_goal,dist_from_start,colls,inters
-    def _is_bad_pos(self,measures):
-        '''
-        checks if the car has collided with any thing or
-        crossed the sidewalk or it has been stand still for too long
+    def _get_vector_value(self,vec):
+        return sqrt(vec.x**2+vec.y**2)
+    
+    def draw_path(self,points):
+        draw_waypoints(self.world,points)
+    
+    def check_path(self,loc):
+        loc=self.gp._localize(loc)
+        for i in range(len(self.waypoints)):
+            point=self.waypoints[i].transform.location
+            point=self.gp._localize(point)
+            if point==loc:
+                return True
+        return False
+    
+    def _get_measures(self):
+        speed=self.vehicle.get_velocity()
+        speed=self._get_vector_value(speed)
+        speed=speed/10. if speed>0 else 0.
         
-        :parm measures: all measurments came from _make_measures_blob function
-        :return: boolean value
+        acc=self.vehicle.get_acceleration()
+        acc=self._get_vector_value(acc)
+        acc=acc/10. if acc>0 else 0.
         
-        '''
-        colls=measures[3]
-        inters=measures[4]
-        return self._did_collide(colls) or self._sidewalk(inters)\
-            or self._is_quiet()
+        transform=self.vehicle.get_transform()
+        loc=transform.location
+        dist_from_start=loc.distance(self.start_loc)
+        dist_to_goal=loc.distance(self.goal_loc)
+        self.checkpoint=self.check_path(loc)
+        
+        dif=self._compute_dif_between_positions(loc)
+        self._update_stand(dif)
+        
+        colls=0
+        for col in self.collision_data:
+            colls+=self._get_vector_value(col.normal_impulse)
+        return np.array([speed,acc,dist_from_start,dist_to_goal,colls])
+    
+    
+    def _get_images_data(self):
+        data=[]
+        data.append(self.rgb_data)
+        data.append(self.seg_data)
+        data=np.stack(data,2)
+        return data
 
-               
-    def compute_dif_between_positions(self,cur):
-        dif=np.linalg.norm(np.array(cur)-np.array(self.prev_pos))
-        self.prev_pos[:]=cur[:]
-        return 1 if dif>0.001 else 0
+    
+    def _get_data(self):
+        data=self._get_images_data()
+        measures=self._get_measures()
+        hl_command=self.get_hl_command()
+        return data,measures,hl_command
+
+
+    def _is_goal(self,dist):
+        return dist<0.05
+
+    def _is_collid(self,colls):
+        return colls>0
+
+    def _is_so_far(self,dist):
+        return dist>=self.dist_from_start_to_end*2.
+    
+    def _bad_pos(self,colls,dist_to_goal):
+        if self._is_collid(colls) or self._is_so_far(dist_to_goal) or \
+        self._is_quiet():
+            return True
+        return False
+
+
+    ''' is quiet sensor'''
+    def _compute_dif_between_positions(self,cur):
+        
+        dif=np.linalg.norm(np.array([cur.x,cur.y])-
+                           np.array([self.prev_pos.x,self.prev_pos.y]))
+        self.prev_pos=cur
+        return 1 if dif>0.01 else 0
     
     def _init_stand(self):
         self.stand=self.stand_limit
@@ -171,175 +310,97 @@ class CarlaEnv:
             self.stand=self.stand_limit
         elif self.stand>0:
             self.stand-=1
+    '''----------------'''
+
+    '''
+    VOID = -1
+    LEFT = 1
+    RIGHT = 2
+    STRAIGHT = 3
+    LANEFOLLOW = 4
+    CHANGELANELEFT = 5
+    CHANGELANERIGHT = 6
+    '''
+
+    def get_hl_command(self):
+        cl=self.vehicle.get_location()
+        direction=self.gp.abstract_route_plan(cl,self.goal_loc)[0].value        
+        if direction==-1:
+            direction=0
+#        if direction==5 or direction==6 or direction==4:
+#            direction=3
+        directions_vector=np.zeros(self.hl_command_shape)
+        directions_vector[direction]=1
+        return directions_vector
     
-    
-    #TODO: should be revised
-    #speed,dist_to_goal,dist_from_start,colls,inters
     def _compute_reward(self,measures):
-        speed=measures[0]
-        dist_to_goal=measures[1]
-        dist_from_start=measures[2]
-        inters=measures[4]
-        
-        alpha=0.1 # should be revised
+        speed,acc,dist_from_start,dist_to_goal,colls=\
+            measures[0],measures[1],measures[2],measures[3],measures[4]
         
         if self._is_goal(dist_to_goal):
-            return 100
-        if self._is_bad_pos(measures):
-            return -100
-        r=alpha*(speed+dist_from_start-inters) #------------------
-        return r
-        
-    def _sidewalk(self,inters):
-        return inters>0.
-    
-    def _is_goal(self,dist):
-        return dist<0.05
-#        return False
-    
-    def _did_collide(self,colls):
-        return colls>0
-    
-    def _get_data(self,reset=False):
-        measures,data=self.client.read_data()
-        
-        # dave it just in case!
-        if reset:
-            self.start_location_time=measures.game_timestamp
-        
-        data=self._data_preprocessing(data)
-        state,colls,inters=self._measures_preprocessing(measures)
-        measures=self._make_measures_blob(state,colls,inters)
-    
-        return data,measures
-    
-    def _make_measures_blob(self,state,colls,inters):
-        pos=np.array(state[0:2])
-        dist_to_goal=np.linalg.norm(pos-self.goal_location)
-        dist_from_start=np.linalg.norm(pos-self.start_location)
-        
-        speed=state[2]
-        colls=sum(colls)
-        
-        return np.array([speed,dist_to_goal,dist_from_start,colls,inters])
-    
-    
-    def _get_one_hot(self,source,des):
-        print('\n\n\n\n',dir(source))
-        c=self.planner.get_next_command(source.location,source.orientation,
-                                        des.location,des.orientation)
-    
-    # TODO: add onehot vector
-    def _measures_preprocessing(self,measures):
-        PM = measures.player_measurements
+            self.is_goal=True
+            return 50
+        if self._bad_pos(colls,dist_to_goal):
+            self.bad_pos=True
+            return -50
+        reward=20 if self.checkpoint else 0
+        alpha=0.1
+        reward+= exp(speed)
+        reward*=alpha
+        return reward
 
-        pos_x = PM.transform.location.x / 100 # cm -> m
-        pos_y = PM.transform.location.y / 100
-        
-        # to prevent negative values
-        speed = PM.forward_speed/10.0 if PM.forward_speed>=0 else 0
-        dif=self.compute_dif_between_positions([pos_x,pos_y])
-#        self.movement_list.append(dif)
-        self._update_stand(dif)
-        
-        col_cars = PM.collision_vehicles
-        col_ped = PM.collision_pedestrians
-        col_other = PM.collision_other
 
-        offroad = PM.intersection_offroad
-        
-#        command=self._get_one_hot(PM.transform,self.goal)
-        
-    
-        return [pos_x, pos_y, speed], [col_cars, col_ped, col_other],  offroad
-    
-#    def _data_preprocessing(self,data):
-#        ready_data=[]
-#        for key in self.cameras:
-#            img,img_data=data[key],data[key].data
-#            
-#            if key=='seg':
-#                img_data=self.segmentator.forward(img_data)
-#            # depth camera produces gray scale image
-#            if not key=='depth':
-#                # astype('float32') is needed as attribute data
-#                # returns data in float64 format which generates
-#                # error with opencv
-#                img_data=cv.cvtColor(img_data.astype('float32'),cv.COLOR_BGR2GRAY)
-#            
-#            img_data=np.resize(img_data,self.callibaration_shape)/255.0
-#            ready_data.append(img_data)
-#
-#        return np.stack(ready_data,axis=2)
-        
-    def _data_preprocessing(self,data):
-        ready_data=[]
-        img_data=data['rgb'].data
-        seg_data=self.segmentator.forward(img_data)          
-        seg_data=cv.cvtColor(seg_data.astype('float32'),cv.COLOR_BGR2GRAY)
-        
-        img_data=cv.cvtColor(img_data.astype('float32'),cv.COLOR_BGR2GRAY)
-        
-        img_data=img_data[:350,:]
-        seg_data=seg_data[:350,:]        
-#        
-        img_data=cv.resize(img_data,(192,182),cv.INTER_AREA)/255.
-        seg_data=cv.resize(seg_data,(192,182),cv.INTER_AREA)/255.
-                        
-        ready_data.append(img_data)
-        ready_data.append(seg_data)
-    
+    def _is_done(self,colls,dist_to_goal):
+#        print('goal= ',self.is_goal,' bad= ',self.bad_pos)
+#        print(self.is_goal,self.bad_pos)
+        return self.is_goal or self.bad_pos
 
-        return np.stack(ready_data,axis=2)
     
-    
-    def _start_new_episod(self):
-        '''
-        chooses a random position for the car to start from 
-        and chooses another random position to be considered 
-        as the destination of the navigation... this method 
-        is needed to calculate the dist_to_goal value which
-        is used as parameter feeded to the model later
-        
-        '''
-        n_spots=len(self.scene.player_start_spots)
-        start_point=random.randint(0,max(0,n_spots-1))
-        goal_point=random.randint(0,max(0,n_spots-1))
-        
-        # try to find another position which is not the same 
-        # as the starting position
-        while start_point==goal_point:
-            goal_point=random.randint(0,max(0,n_spots-1))
-        
-        self.start=self.scene.player_start_spots[start_point]
-        self.goal=self.scene.player_start_spots[goal_point]
-        
-        self.start_location=[self.start.location.x/100.0, self.start.location.y/100.0]
-        self.prev_pos=self.start_location[:]
-        self.goal_location=[self.goal.location.x/100.0, self.goal.location.y/100.0]
-        
-        self.client.start_episode(start_point)
+    # ---------------------------------
+    def reset(self):
+        print(Fore.YELLOW+'CarlaEnv log: reset for the {0} time'.format(self.reset_timer)+Fore.WHITE)
+        self._clear_history()
+        self._initialize_position()
         self._init_stand()
+#        self._empty_cycle()
+        data,measures,hl_command=self._get_data()
+        return data,measures,hl_command
+    
+    def step(self,actions):
+#        print(actions)
+#        actions=actions[0]
+        steer=np.clip(actions[0],-1,1).astype(np.float32)
+        throttle=np.clip(actions[1],0,1).astype(np.float32)
         
+        steer=steer.item()
+        throttle=throttle.item()
+        control=carla.VehicleControl(throttle,steer,0)
+#        control=carla.VehicleControl(0.3,0,0)
+        self.vehicle.apply_control(control)
+        data,measures,hl_command=self._get_data()
+        reward=self._compute_reward(measures)
+        done=self._is_done(measures[4],measures[3])
+#        self.log(measures)
+        return data,measures,hl_command,reward,done,{}
     
-    def _get_settings(self,n_vehicles,n_peds):
-        settings=CarlaSettings()
-        settings.set(
-            SynchronousMode=True,
-            SendNonPlayerAgentsInfo=True,
-            NumberOfVehicles=n_vehicles,
-            NumberOfPedestrians=n_peds,
-            WeatherId=1,
-            QualityLevel='Low',
-#            ServerTimeOut=10000
-        )
-        settings.randomize_seeds()
-        return settings
+    def dead_command(self):
+        self.step([[0.,0.,0.]])
     
-    def _add_cameras(self):            
-        cam=Camera('rgb')
-        cam.set(FOV=90.0)
-        cam.set_image_size(896,512)
-        cam.set_position(x=0.30, y=0, z=1.30)
-        cam.set_rotation(pitch=0, yaw=0, roll=0)
-        self.settings.add_sensor(cam)
+    def close(self):
+        for actor in self.actors:
+            actor.destroy()
+            
+    def render(self):
+        pass
+            
+    def log(self,measures):
+        speed,acc,dist_from_start,dist_to_goal,colls=\
+        measures[0],measures[1],measures[2],measures[3],measures[4]
+        print('speed=',speed)
+        print('acc=',acc)
+        print('dis to goal=',dist_to_goal)
+        print('dis from start=',dist_from_start)
+        print('dist from start to end=',self.dist_from_start_to_end)
+        print('colls=',colls)
+        
+        print('stand=',self.stand)
