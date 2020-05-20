@@ -14,7 +14,7 @@ except IndexError:
     print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
 
 #
-# #windows
+ #windows
 #try:
 #    sys.path.append("carla-0.9.5-py3.7-win-amd64.egg")
 #except IndexError:
@@ -25,6 +25,7 @@ import carla
 from carla import ColorConverter as cc
 from navigation.global_route_planner import GlobalRoutePlanner
 from navigation.global_route_planner_dao import GlobalRoutePlannerDAO
+from navigation.misc import draw_waypoints
 import cv2 as cv
 
 class CarlaEnv(gym.Env):
@@ -32,8 +33,9 @@ class CarlaEnv(gym.Env):
     callibaration_shape=(182,192)
     callibarationRGB_shape=(182,192,2)
     measures_shape=(5,)
-    hl_command_shape=(4,)
+    hl_command_shape=(7,)
     
+    commands=['VOID','LEFT','RIGHT' ,'STRAIGHT','LANEFOLLOW','CHANGELANELEFT', 'CHANGELANERIGHT']
     num_envs=1
     n_actions=2
     stand=300
@@ -48,6 +50,7 @@ class CarlaEnv(gym.Env):
     c=0
     rgb_data=None
     seg_data=None
+    checkpoint=None
 
     metadata = {'render.modes': ['human']}
     
@@ -73,8 +76,8 @@ class CarlaEnv(gym.Env):
         self.blueprint=self._connect()
         self.vehicle=self._add_vehicle(self.blueprint)
         self._add_actors()
-        gpDAO=GlobalRoutePlannerDAO(self.map)
-        self.gp=GlobalRoutePlanner(gpDAO)
+        self.gpDAO=GlobalRoutePlannerDAO(self.map)
+        self.gp=GlobalRoutePlanner(self.gpDAO)
         self.gp.setup()
     
     def _connect(self):
@@ -182,11 +185,21 @@ class CarlaEnv(gym.Env):
         self.bad_pos=False
         self.reset_timer+=1
 
-    
+
+    def get_waypoints(self,route):
+        waypoints=[]
+        for i in route:
+            point=self.gp._graph.nodes[i]['vertex']
+            point=carla.Location(*point)
+            point=self.gpDAO.get_waypoint(point)
+            waypoints.append(point)
+        return waypoints
+        
     def _initialize_position(self):
         self.vehicle.apply_control(carla.VehicleControl(brake=0.0, throttle=0.0))
         transform = random.choice(self.map.get_spawn_points())
         self.vehicle.set_transform(transform)
+        time.sleep(2)
         self.start_loc=self.vehicle.get_location()
         self.prev_pos=self.start_loc
         
@@ -196,10 +209,11 @@ class CarlaEnv(gym.Env):
         gp=np.array([self.goal_loc.x,self.goal_loc.y])
         self.dist_from_start_to_end=np.linalg.norm(sp-gp)
         
-        self.route=self.gp.trace_route(self.start_loc,self.goal_loc)
+        self.route=self.gp._path_search(self.start_loc,self.goal_loc)
+        self.waypoints=self.get_waypoints(self.route)
+#        self.draw_path(self.waypoints)
         self.c=0
         
-        time.sleep(2)
     
     def _empty_cycle(self):
         print(Fore.YELLOW+'CarlaEnv log: empty cycle'+Fore.WHITE)
@@ -209,6 +223,18 @@ class CarlaEnv(gym.Env):
     
     def _get_vector_value(self,vec):
         return sqrt(vec.x**2+vec.y**2)
+    
+    def draw_path(self,points):
+        draw_waypoints(self.world,points)
+    
+    def check_path(self,loc):
+        loc=self.gp._localize(loc)
+        for i in range(len(self.waypoints)):
+            point=self.waypoints[i].transform.location
+            point=self.gp._localize(point)
+            if point==loc:
+                return True
+        return False
     
     def _get_measures(self):
         speed=self.vehicle.get_velocity()
@@ -223,7 +249,8 @@ class CarlaEnv(gym.Env):
         loc=transform.location
         dist_from_start=loc.distance(self.start_loc)
         dist_to_goal=loc.distance(self.goal_loc)
-
+        self.checkpoint=self.check_path(loc)
+        
         dif=self._compute_dif_between_positions(loc)
         self._update_stand(dif)
         
@@ -286,10 +313,13 @@ class CarlaEnv(gym.Env):
     '''----------------'''
 
     '''
-    VOID = 0
+    VOID = -1
     LEFT = 1
     RIGHT = 2
     STRAIGHT = 3
+    LANEFOLLOW = 4
+    CHANGELANELEFT = 5
+    CHANGELANERIGHT = 6
     '''
 
     def get_hl_command(self):
@@ -297,9 +327,9 @@ class CarlaEnv(gym.Env):
         direction=self.gp.abstract_route_plan(cl,self.goal_loc)[0].value        
         if direction==-1:
             direction=0
-        if direction==5 or direction==6 or direction==4:
-            direction=3
-        directions_vector=np.zeros((4,))
+#        if direction==5 or direction==6 or direction==4:
+#            direction=3
+        directions_vector=np.zeros(self.hl_command_shape)
         directions_vector[direction]=1
         return directions_vector
     
@@ -309,13 +339,14 @@ class CarlaEnv(gym.Env):
         
         if self._is_goal(dist_to_goal):
             self.is_goal=True
-            return 100
+            return 50
         if self._bad_pos(colls,dist_to_goal):
             self.bad_pos=True
-            return -100
+            return -50
+        reward=20 if self.checkpoint else 0
         alpha=0.1
-        reward= alpha*(exp(speed)+dist_from_start-dist_to_goal)
-#        print('reward= ',reward)
+        reward+= exp(speed)
+        reward*=alpha
         return reward
 
 

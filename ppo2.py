@@ -1,8 +1,10 @@
 import time
 
 import gym
+import os
 import numpy as np
 import tensorflow as tf
+import joblib
 
 from runners import Runner
 from base_models import ActorCriticRLModel
@@ -53,8 +55,8 @@ class PPO2(ActorCriticRLModel):
     """
     def __init__(self, policy, env, gamma=0.99, n_steps=128, ent_coef=0.01, learning_rate=2.5e-4, vf_coef=0.5,
                  max_grad_norm=0.5, lam=0.95, nminibatches=4, noptepochs=4, cliprange=0.2, cliprange_vf=None,
-                 verbose=2, tensorboard_log=None, _init_setup_model=True, policy_kwargs=None,
-                 full_tensorboard_log=False, seed=None, n_cpu_tf_sess=None):
+                 verbose=2, save_each=0, tensorboard_log=None, _init_setup_model=True, 
+                 policy_kwargs=None,full_tensorboard_log=False, seed=None, n_cpu_tf_sess=None):
 
         self.learning_rate = learning_rate
         self.cliprange = cliprange
@@ -70,6 +72,7 @@ class PPO2(ActorCriticRLModel):
         self.tensorboard_log = tensorboard_log
         self.full_tensorboard_log = full_tensorboard_log
         self.env=env
+        self.save_each=save_each
 
         self.action_ph = None
         self.advs_ph = None
@@ -231,6 +234,22 @@ class PPO2(ActorCriticRLModel):
                         else:
                             tf.summary.histogram('observation', train_model.obs_ph)
 
+                
+                def save(save_path):
+                    ps = self.sess.run(self.params)
+                    joblib.dump(ps, save_path)
+                
+                def load(load_path):
+                    load_path=os.path.join(os.getcwd(),load_path)
+                    loaded_params = joblib.load('1')
+                    restores = []
+                    for p, loaded_p in zip(self.params, loaded_params):
+                        restores.append(p.assign(loaded_p))
+                    self.sess.run(restores)
+                
+                
+                self.save=save
+                self.load=load
                 self.train_model = train_model
                 self.act_model = act_model
                 self.step = act_model.step
@@ -369,6 +388,16 @@ class PPO2(ActorCriticRLModel):
                 t_now = time.time()
                 fps = int(self.n_batch / (t_now - t_start))
 
+                # save
+                if update%self.save_each==0:
+                    savepath='/home/colab/Desktop/checkpoints'
+                    if not os.path.exists(savepath):
+                        os.mkdir(savepath)
+                    filepath = savepath+'/'+str(update)
+                    print('PPO@ log: Saving to',filepath)
+                    self.save(filepath)
+                
+                
                 if writer is not None:
                     total_episode_reward_logger(self.episode_reward,
                                                 true_reward.reshape((self.n_envs, self.n_steps)),
