@@ -37,9 +37,9 @@ class CarlaEnv(gym.Env):
     
     commands=['VOID','LEFT','RIGHT' ,'STRAIGHT','LANEFOLLOW','CHANGELANELEFT', 'CHANGELANERIGHT']
     num_envs=1
-    n_actions=2
-    stand=300
-    stand_limit=300
+    n_actions=1
+    stand=150
+    stand_limit=150
     actors=[]
     collision_data=[]
     SHOW_VIEW=True
@@ -297,7 +297,7 @@ class CarlaEnv(gym.Env):
         dif=np.linalg.norm(np.array([cur.x,cur.y])-
                            np.array([self.prev_pos.x,self.prev_pos.y]))
         self.prev_pos=cur
-        return 1 if dif>0.01 else 0
+        return 1 if dif>0.05 else 0
     
     def _init_stand(self):
         self.stand=self.stand_limit
@@ -366,16 +366,18 @@ class CarlaEnv(gym.Env):
         data,measures,hl_command=self._get_data()
         return data,measures,hl_command
     
-    def step(self,actions):
+    def step(self,actions,dead=False):
 #        print(actions)
 #        actions=actions[0]
         steer=np.clip(actions[0],-1,1).astype(np.float32)
-        throttle=np.clip(actions[1],0,1).astype(np.float32)
+        throttle=0.2
         
         steer=steer.item()
-        throttle=throttle.item()
-        control=carla.VehicleControl(throttle,steer,0)
-#        control=carla.VehicleControl(0.3,0,0)
+#        throttle=throttle.item()
+        if dead:
+            control=carla.VehicleControl(0,0,0)
+        else:
+            control=carla.VehicleControl(throttle,steer,0)
         self.vehicle.apply_control(control)
         data,measures,hl_command=self._get_data()
         reward=self._compute_reward(measures)
@@ -384,7 +386,7 @@ class CarlaEnv(gym.Env):
         return data,measures,hl_command,reward,done,{}
     
     def dead_command(self):
-        self.step([[0.,0.,0.]])
+        self.step([0.,0.,0.],True)
     
     def close(self):
         for actor in self.actors:

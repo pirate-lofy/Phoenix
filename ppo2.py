@@ -5,6 +5,7 @@ import os
 import numpy as np
 import tensorflow as tf
 import joblib
+import time
 
 from runners import Runner
 from base_models import ActorCriticRLModel
@@ -93,6 +94,8 @@ class PPO2(ActorCriticRLModel):
         self.value = None
         self.n_batch = None
         self.summary = None
+        
+        self.limit=30
 
         super().__init__(policy=policy, env=env, verbose=verbose, requires_vec_env=True,
                          _init_setup_model=_init_setup_model, policy_kwargs=policy_kwargs,
@@ -241,7 +244,7 @@ class PPO2(ActorCriticRLModel):
                 
                 def load(load_path):
                     load_path=os.path.join(os.getcwd(),load_path)
-                    loaded_params = joblib.load('1')
+                    loaded_params = joblib.load(load_path)
                     restores = []
                     for p, loaded_p in zip(self.params, loaded_params):
                         restores.append(p.assign(loaded_p))
@@ -360,6 +363,7 @@ class PPO2(ActorCriticRLModel):
                 # Unpack
                 obs, measures, hl_command, returns, masks, actions, values, neglogpacs, states, \
                         true_reward = rollout
+                self.env.dead_command()
 
                 callback.on_rollout_end()
 
@@ -371,6 +375,8 @@ class PPO2(ActorCriticRLModel):
                 if states is None:  # nonrecurrent version
                     update_fac = self.n_batch // self.nminibatches // self.noptepochs + 1
                     inds = np.arange(self.n_batch)
+                    
+                    tn=time.time()
                     for epoch_num in range(self.noptepochs):
                         np.random.shuffle(inds)
                         for start in range(0, self.n_batch, batch_size):
@@ -382,7 +388,10 @@ class PPO2(ActorCriticRLModel):
                             
                             mb_loss_vals.append(self._train_step(lr_now, cliprange_now, *slices, writer=writer,
                                                                  update=timestep, cliprange_vf=cliprange_vf_now))
-#                    print('here')
+                        if tn+self.limit<=time.time():
+                            print('PPO2 log: exceeded the full episod time')
+                            tn=time.time()
+                            self.env.reset()
 
                 loss_vals = np.mean(mb_loss_vals, axis=0)
                 t_now = time.time()
