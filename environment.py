@@ -7,18 +7,18 @@ import time
 from math import exp,sqrt
 from colorama import Fore
 
-#linux
-try:
-    sys.path.append("carla-0.9.5-py3.5-linux-x86_64.egg")
-except IndexError:
-    print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
+##linux
+#try:
+#    sys.path.append("carla-0.9.5-py3.5-linux-x86_64.egg")
+#except IndexError:
+#    print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
 
 #
- #windows
-#try:
-#    sys.path.append("carla-0.9.5-py3.7-win-amd64.egg")
-#except IndexError:
-#    print(Fore.YELLOW+'CarlaEnv log: cant append carla egg'+Fore.WHITE)
+# windows
+try:
+    sys.path.append("carla-0.9.5-py3.7-win-amd64.egg")
+except IndexError:
+    print(Fore.YELLOW+'CarlaEnv log: cant append carla egg'+Fore.WHITE)
 
 
 import carla
@@ -32,16 +32,17 @@ class CarlaEnv(gym.Env):
     # initial variables
     callibaration_shape=(182,192)
     callibarationRGB_shape=(182,192,2)
-    measures_shape=(5,)
+    measures_shape=(4,)
     hl_command_shape=(7,)
     
     commands=['VOID','LEFT','RIGHT' ,'STRAIGHT','LANEFOLLOW','CHANGELANELEFT', 'CHANGELANERIGHT']
     num_envs=1
-    n_actions=1
+    n_actions=2
     stand=150
     stand_limit=150
     actors=[]
     collision_data=[]
+    invasion_data=[]
     SHOW_VIEW=True
     is_goal=None
     bad_pos=None
@@ -51,6 +52,8 @@ class CarlaEnv(gym.Env):
     rgb_data=None
     seg_data=None
     checkpoint=None
+    dist_to_goal=None
+    visited=None
 
     metadata = {'render.modes': ['human']}
     
@@ -125,6 +128,12 @@ class CarlaEnv(gym.Env):
         col = self.world.spawn_actor(col, transform, attach_to=self.vehicle)
         col.listen(lambda data,: self._detect_col(data))
         self.actors.append(col)
+        
+        # lane invasion
+        inv= self.blueprint.find('sensor.other.lane_invasion')
+        inv = self.world.spawn_actor(inv, transform, attach_to=self.vehicle)
+        inv.listen(lambda data,: self._detect_lane_invasion(data))
+        self.actors.append(inv)
     
     def _to_gray(self,img):
         return img[:,:,0]*0.299+img[:,:,1]*0.587+img[:,:,2]*0.114
@@ -150,17 +159,18 @@ class CarlaEnv(gym.Env):
             cv.waitKey(1)
         
     def _prepare_seg(self,img):
-        res=np.zeros(img.shape)
-        
-        mask1=img==[157, 234, 50]
-        mask2=img==[128, 64, 128]
-        mask=np.logical_or(mask1,mask2)
-        res[mask]=1
-        res[np.logical_not(mask)]=0
-        r=res>0
-        r2=res<255
-        res[np.logical_and(r,r2)]=255
-        res=self._to_gray(res)[:350,:]
+#        res=np.zeros(img.shape)
+#        
+#        mask1=img==[157, 234, 50]
+#        mask2=img==[128, 64, 128]
+#        mask=np.logical_or(mask1,mask2)
+#        res[mask]=1
+#        res[np.logical_not(mask)]=0
+#        r=res>0
+#        r2=res<255
+#        res[np.logical_and(r,r2)]=255
+#        res=self._to_gray(res)[:350,:]
+        res=self._to_gray(img)[:350,:]
         return res
     
     def _process_seg(self, image):
@@ -168,10 +178,10 @@ class CarlaEnv(gym.Env):
         i3=np.array(image.raw_data)
         i3 = i3.reshape((512,896,4))[:,:,:3]
         i3=self._prepare_seg(i3)
-#        if self.SHOW_VIEW:
-#            cv.imshow("",i3)
-#            cv.waitKey(1)
         res=cv.resize(i3,(192,182),cv.INTER_AREA)/255.
+#        if self.SHOW_VIEW:
+#            cv.imshow("",res)
+#            cv.waitKey(1)
         self.seg_data=res[:]
 
         
@@ -179,14 +189,20 @@ class CarlaEnv(gym.Env):
         self.collision_data.append(data)
         
     
+    def _detect_lane_invasion(self,data):
+        self.invasion_data.append(data)
+        
+    
     def _clear_history(self):
         self.collision_data=[]
+        self.invasion_data=[]
         self.is_goal=False
         self.bad_pos=False
         self.reset_timer+=1
 
 
     def get_waypoints(self,route):
+        self.visited=[False]*len(route)
         waypoints=[]
         for i in route:
             point=self.gp._graph.nodes[i]['vertex']
@@ -230,9 +246,12 @@ class CarlaEnv(gym.Env):
     def check_path(self,loc):
         loc=self.gp._localize(loc)
         for i in range(len(self.waypoints)):
+            if self.visited[i]:
+                continue
             point=self.waypoints[i].transform.location
             point=self.gp._localize(point)
             if point==loc:
+                self.visited[i]=True
                 return True
         return False
     
@@ -247,17 +266,17 @@ class CarlaEnv(gym.Env):
         
         transform=self.vehicle.get_transform()
         loc=transform.location
-        dist_from_start=loc.distance(self.start_loc)
-        dist_to_goal=loc.distance(self.goal_loc)
+        self.dist_to_goal=loc.distance(self.goal_loc)
         self.checkpoint=self.check_path(loc)
         
         dif=self._compute_dif_between_positions(loc)
         self._update_stand(dif)
         
+        invasion=len(self.invasion_data)
         colls=0
         for col in self.collision_data:
             colls+=self._get_vector_value(col.normal_impulse)
-        return np.array([speed,acc,dist_from_start,dist_to_goal,colls])
+        return np.array([speed,acc,colls,invasion])
     
     
     def _get_images_data(self):
@@ -275,18 +294,15 @@ class CarlaEnv(gym.Env):
         return data,measures,hl_command
 
 
-    def _is_goal(self,dist):
-        return dist<0.05
+    def _is_goal(self):
+        return self.dist_to_goal<0.05
 
-    def _is_collid(self,colls):
-        return colls>0
+    def _is_positive(self,val):
+        return val>0
 
-    def _is_so_far(self,dist):
-        return dist>=self.dist_from_start_to_end*2.
     
-    def _bad_pos(self,colls,dist_to_goal):
-        if self._is_collid(colls) or self._is_so_far(dist_to_goal) or \
-        self._is_quiet():
+    def _bad_pos(self,colls,invasion):
+        if self._is_positive(colls) or self._is_positive(invasion) or self._is_quiet():
             return True
         return False
 
@@ -334,23 +350,22 @@ class CarlaEnv(gym.Env):
         return directions_vector
     
     def _compute_reward(self,measures):
-        speed,acc,dist_from_start,dist_to_goal,colls=\
-            measures[0],measures[1],measures[2],measures[3],measures[4]
-        
-        if self._is_goal(dist_to_goal):
+        speed,acc,colls,invasion=measures[0],measures[1],measures[2],measures[3]
+        if self._is_goal():
             self.is_goal=True
             return 50
-        if self._bad_pos(colls,dist_to_goal):
+        if self._bad_pos(colls,invasion):
             self.bad_pos=True
             return -50
-        reward=20 if self.checkpoint else 0
-        alpha=0.1
-        reward+= exp(speed)
-        reward*=alpha
+        reward=1 if self.checkpoint else 0
+#        alpha=0.1
+#        reward+= exp(speed)+exp(acc)
+#        reward*=alpha
+        print(reward)
         return reward
 
 
-    def _is_done(self,colls,dist_to_goal):
+    def _is_done(self):
 #        print('goal= ',self.is_goal,' bad= ',self.bad_pos)
 #        print(self.is_goal,self.bad_pos)
         return self.is_goal or self.bad_pos
@@ -366,27 +381,21 @@ class CarlaEnv(gym.Env):
         data,measures,hl_command=self._get_data()
         return data,measures,hl_command
     
-    def step(self,actions,dead=False):
-#        print(actions)
-#        actions=actions[0]
+    def step(self,actions):
         steer=np.clip(actions[0],-1,1).astype(np.float32)
-        throttle=0.2
+        throttle=np.clip(actions[1],0,1).astype(np.float32)
         
         steer=steer.item()
-#        throttle=throttle.item()
-        if dead:
-            control=carla.VehicleControl(0,0,0)
-        else:
-            control=carla.VehicleControl(throttle,steer,0)
+        throttle=throttle.item()
+        control=carla.VehicleControl(throttle,steer,0)
         self.vehicle.apply_control(control)
         data,measures,hl_command=self._get_data()
         reward=self._compute_reward(measures)
-        done=self._is_done(measures[4],measures[3])
-#        self.log(measures)
+        done=self._is_done()
         return data,measures,hl_command,reward,done,{}
     
     def dead_command(self):
-        self.step([0.,0.,0.],True)
+        self.step([0.,0.,0.])
     
     def close(self):
         for actor in self.actors:

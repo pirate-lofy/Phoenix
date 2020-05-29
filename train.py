@@ -15,8 +15,8 @@ try:
 #    env = VecNormalize(env)
     env=CarlaEnv()
 #    env = make_vec_env(lambda: env, n_envs=1)
-    model=PPO2(CustomPolicy,env,save_each=10)
-    model.learn(100000)
+    model=PPO2(CustomPolicy,env,save_each=20,tensorboard_log='/home/colab/Desktop/logs')
+    model.learn(10000000)
 except Exception:
     env.close()
     logging.exception("An exception was thrown!")

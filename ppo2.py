@@ -344,6 +344,7 @@ class PPO2(ActorCriticRLModel):
 
             callback.on_training_start(locals(), globals())
 
+            tn=time.time()
             for update in range(1, n_updates + 1):
                 assert self.n_batch % self.nminibatches == 0, ("The number of minibatches (`nminibatches`) "
                                                                "is not a factor of the total number of samples "
@@ -376,7 +377,6 @@ class PPO2(ActorCriticRLModel):
                     update_fac = self.n_batch // self.nminibatches // self.noptepochs + 1
                     inds = np.arange(self.n_batch)
                     
-                    tn=time.time()
                     for epoch_num in range(self.noptepochs):
                         np.random.shuffle(inds)
                         for start in range(0, self.n_batch, batch_size):
@@ -388,10 +388,10 @@ class PPO2(ActorCriticRLModel):
                             
                             mb_loss_vals.append(self._train_step(lr_now, cliprange_now, *slices, writer=writer,
                                                                  update=timestep, cliprange_vf=cliprange_vf_now))
-                        if tn+self.limit<=time.time():
-                            print('PPO2 log: exceeded the full episod time')
-                            tn=time.time()
-                            self.env.reset()
+                if tn+self.limit<=time.time():
+                    print('PPO2 log: exceeded the full episod time')
+                    tn=time.time()
+                    self.env.reset()
 
                 loss_vals = np.mean(mb_loss_vals, axis=0)
                 t_now = time.time()
