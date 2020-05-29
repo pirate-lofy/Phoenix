@@ -339,6 +339,7 @@ class DummyVecEnv(VecEnv):
         self.buf_infos = [{} for _ in range(self.num_envs)]
         self.actions = None
         self.metadata = env.metadata
+        self.dead_command=env.dead_command
 
     def step_async(self, actions):
         self.actions = actions
