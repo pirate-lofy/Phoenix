@@ -37,7 +37,7 @@ class CarlaEnv(gym.Env):
     
     commands=['VOID','LEFT','RIGHT' ,'STRAIGHT','LANEFOLLOW','CHANGELANELEFT', 'CHANGELANERIGHT']
     num_envs=1
-    n_actions=2
+    n_actions=1
     stand=150
     stand_limit=150
     actors=[]
@@ -357,7 +357,7 @@ class CarlaEnv(gym.Env):
         if self._bad_pos(colls,invasion):
             self.bad_pos=True
             return -50
-        reward=1 if self.checkpoint else 0
+        reward=2 if self.checkpoint else 0.1
 #        alpha=0.1
 #        reward+= exp(speed)+exp(acc)
 #        reward*=alpha
@@ -381,13 +381,17 @@ class CarlaEnv(gym.Env):
         data,measures,hl_command=self._get_data()
         return data,measures,hl_command
     
-    def step(self,actions):
+    def step(self,actions,dead=False):
         steer=np.clip(actions[0],-1,1).astype(np.float32)
-        throttle=np.clip(actions[1],0,1).astype(np.float32)
+#        throttle=np.clip(actions[1],0,1).astype(np.float32)
+        throttle=0.2
         
         steer=steer.item()
-        throttle=throttle.item()
-        control=carla.VehicleControl(throttle,steer,0)
+#        throttle=throttle.item()
+        if not dead:
+            control=carla.VehicleControl(throttle,steer,0)
+        else:
+            control=carla.VehicleControl(0,0,0)
         self.vehicle.apply_control(control)
         data,measures,hl_command=self._get_data()
         reward=self._compute_reward(measures)
@@ -395,7 +399,7 @@ class CarlaEnv(gym.Env):
         return data,measures,hl_command,reward,done,{}
     
     def dead_command(self):
-        self.step([0.,0.,0.])
+        self.step([0.,0.,0.],True)
     
     def close(self):
         for actor in self.actors:
