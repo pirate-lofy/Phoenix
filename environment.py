@@ -8,17 +8,17 @@ from math import exp,sqrt
 from colorama import Fore
 
 ##linux
-#try:
-#    sys.path.append("carla-0.9.5-py3.5-linux-x86_64.egg")
-#except IndexError:
-#    print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
+try:
+    sys.path.append("carla-0.9.5-py3.5-linux-x86_64.egg")
+except IndexError:
+    print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
 
 #
 # windows
-try:
-    sys.path.append("carla-0.9.5-py3.7-win-amd64.egg")
-except IndexError:
-    print(Fore.YELLOW+'CarlaEnv log: cant append carla egg'+Fore.WHITE)
+#try:
+#    sys.path.append("carla-0.9.5-py3.7-win-amd64.egg")
+#except IndexError:
+#    print(Fore.YELLOW+'CarlaEnv log: cant append carla egg'+Fore.WHITE)
 
 
 import carla
@@ -152,11 +152,11 @@ class CarlaEnv(gym.Env):
         img,img_gray=self._prepare_raw_image(image)
         img_gray=img_gray[:350,:]
         img_gray=cv.resize(img_gray,(192,182),cv.INTER_AREA)/255.
-        self.rgb_data=img_gray[:]
+        self.rgb_data=img_gray.copy()
         
-        if self.SHOW_VIEW:
-            cv.imshow('front view',img)
-            cv.waitKey(1)
+#        if self.SHOW_VIEW:
+#            cv.imshow('front view',img)
+#            cv.waitKey(1)
         
     def _prepare_seg(self,img):
 #        res=np.zeros(img.shape)
@@ -179,10 +179,11 @@ class CarlaEnv(gym.Env):
         i3 = i3.reshape((512,896,4))[:,:,:3]
         i3=self._prepare_seg(i3)
         res=cv.resize(i3,(192,182),cv.INTER_AREA)/255.
+        self.seg_data=res.copy()
+        
 #        if self.SHOW_VIEW:
 #            cv.imshow("",res)
 #            cv.waitKey(1)
-        self.seg_data=res[:]
 
         
     def _detect_col(self,data):
@@ -355,13 +356,10 @@ class CarlaEnv(gym.Env):
         if self._is_goal():
             self.is_goal=True
             reward+= 100
-        if self._bad_pos(colls,invasion):
+        elif self._bad_pos(colls,invasion):
             self.bad_pos=True
             reward+= -100
         reward+=10 if self.checkpoint else 0.1
-#        alpha=0.1
-#        reward+= exp(speed)+exp(acc)
-#        reward*=alpha
         if reward>0.1:
             print(reward)
         return reward
