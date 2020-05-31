@@ -8,17 +8,17 @@ from math import exp,sqrt
 from colorama import Fore
 
 ##linux
-try:
-    sys.path.append("carla-0.9.5-py3.5-linux-x86_64.egg")
-except IndexError:
-    print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
+#try:
+#    sys.path.append("carla-0.9.5-py3.5-linux-x86_64.egg")
+#except IndexError:
+#    print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
 
 #
 # windows
-#try:
-#    sys.path.append("carla-0.9.5-py3.7-win-amd64.egg")
-#except IndexError:
-#    print(Fore.YELLOW+'CarlaEnv log: cant append carla egg'+Fore.WHITE)
+try:
+    sys.path.append("carla-0.9.5-py3.7-win-amd64.egg")
+except IndexError:
+    print(Fore.YELLOW+'CarlaEnv log: cant append carla egg'+Fore.WHITE)
 
 
 import carla
@@ -350,18 +350,20 @@ class CarlaEnv(gym.Env):
         return directions_vector
     
     def _compute_reward(self,measures):
-        speed,acc,colls,invasion=measures[0],measures[1],measures[2],measures[3]
+        colls,invasion=measures[2],measures[3]
+        reward=0
         if self._is_goal():
             self.is_goal=True
-            return 50
+            reward+= 100
         if self._bad_pos(colls,invasion):
             self.bad_pos=True
-            return -50
-        reward=2 if self.checkpoint else 0.1
+            reward+= -100
+        reward+=10 if self.checkpoint else 0.1
 #        alpha=0.1
 #        reward+= exp(speed)+exp(acc)
 #        reward*=alpha
-        print(reward,end='*')
+        if reward>0.1:
+            print(reward)
         return reward
 
 
