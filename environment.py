@@ -361,7 +361,7 @@ class CarlaEnv(gym.Env):
 #        alpha=0.1
 #        reward+= exp(speed)+exp(acc)
 #        reward*=alpha
-        print(reward)
+        print(reward,end='*')
         return reward
 
 
