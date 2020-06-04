@@ -5,7 +5,6 @@ import os
 import numpy as np
 import tensorflow as tf
 import joblib
-import time
 
 from runners import Runner
 from base_models import ActorCriticRLModel
@@ -94,8 +93,6 @@ class PPO2(ActorCriticRLModel):
         self.value = None
         self.n_batch = None
         self.summary = None
-        
-        self.limit=30
 
         super().__init__(policy=policy, env=env, verbose=verbose, requires_vec_env=True,
                          _init_setup_model=_init_setup_model, policy_kwargs=policy_kwargs,
@@ -246,7 +243,10 @@ class PPO2(ActorCriticRLModel):
                     load_path=os.path.join(os.getcwd(),load_path)
                     loaded_params = joblib.load(load_path)
                     restores = []
+                    c=0
                     for p, loaded_p in zip(self.params, loaded_params):
+                        print(c,loaded_p.shape)
+                        c+=1
                         restores.append(p.assign(loaded_p))
                     self.sess.run(restores)
                 
@@ -326,7 +326,7 @@ class PPO2(ActorCriticRLModel):
         return policy_loss, value_loss, policy_entropy, approxkl, clipfrac
 
     def learn(self, total_timesteps, callback=None, log_interval=1, tb_log_name="PPO2",
-              reset_num_timesteps=True):
+              reset_num_timesteps=True,step=1):
         # Transform to callable if needed
         self.learning_rate = get_schedule_fn(self.learning_rate)
         self.cliprange = get_schedule_fn(self.cliprange)
@@ -344,8 +344,7 @@ class PPO2(ActorCriticRLModel):
 
             callback.on_training_start(locals(), globals())
 
-            tn=time.time()
-            for update in range(1, n_updates + 1):
+            for update in range(step, n_updates + 1):
                 assert self.n_batch % self.nminibatches == 0, ("The number of minibatches (`nminibatches`) "
                                                                "is not a factor of the total number of samples "
                                                                "collected per rollout (`n_batch`), "
@@ -364,7 +363,6 @@ class PPO2(ActorCriticRLModel):
                 # Unpack
                 obs, measures, hl_command, returns, masks, actions, values, neglogpacs, states, \
                         true_reward = rollout
-                self.env.dead_command()
 
                 callback.on_rollout_end()
 
@@ -376,7 +374,6 @@ class PPO2(ActorCriticRLModel):
                 if states is None:  # nonrecurrent version
                     update_fac = self.n_batch // self.nminibatches // self.noptepochs + 1
                     inds = np.arange(self.n_batch)
-                    
                     for epoch_num in range(self.noptepochs):
                         np.random.shuffle(inds)
                         for start in range(0, self.n_batch, batch_size):
@@ -388,10 +385,7 @@ class PPO2(ActorCriticRLModel):
                             
                             mb_loss_vals.append(self._train_step(lr_now, cliprange_now, *slices, writer=writer,
                                                                  update=timestep, cliprange_vf=cliprange_vf_now))
-                if tn+self.limit<=time.time():
-                    print('PPO2 log: exceeded the full episod time')
-                    tn=time.time()
-                    self.env.reset()
+#                    print('here')
 
                 loss_vals = np.mean(mb_loss_vals, axis=0)
                 t_now = time.time()
@@ -399,7 +393,7 @@ class PPO2(ActorCriticRLModel):
 
                 # save
                 if update%self.save_each==0:
-                    savepath='/home/colab/Desktop/checkpoints'
+                    savepath='checkpoints\\'
                     if not os.path.exists(savepath):
                         os.mkdir(savepath)
                     filepath = savepath+'/'+str(update)

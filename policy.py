@@ -1,5 +1,5 @@
 import tensorflow as tf
-from base_policies import ActorCriticPolicy,RecurrentActorCriticPolicy
+from base_policies import ActorCriticPolicy
 from feature_extractor import impala_gen
 from stable_baselines.common.tf_util import batch_to_seq, seq_to_batch
 from stable_baselines.common.tf_layers import conv, linear, conv_to_fc, lstm
