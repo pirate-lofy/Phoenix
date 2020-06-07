@@ -209,35 +209,24 @@ class CarlaEnv(gym.Env):
             point=self.gpDAO.get_waypoint(point)
             waypoints.append(point)
         return waypoints
-
-    def _sign(self,x1,x2):
-        if x1>x2:
-            xmax=x1
-            xmin=x2
-        elif x2>x1:
-            xmax=x2
-            xmin=x1
-        else:
-            xmax=xmin=x1
-        return xmax,xmin
     
     def _get_between(self,p1,p2):
+        x1,y1=p1[0],p1[1]
+        x2,y2=p2[0],p2[1]
         z=p1[2]
-        x1,x2=p1[0],p2[0]
-        y1,y2=p1[1],p2[1]
-        xmax,xmin=self._sign(x1,x2)
-        lenx=xmax-xmin
-        xs=[xmin]
-        for i in range(1,int(lenx)+1):
-            xs.append(xmin+i)
-
-        ymax,ymin=self._sign(y1,y2)
-        leny=ymax-ymin
-        ys=[ymin]
-        for i in range(1,int(leny)+1):
-            ys.append(ymin+i)
-            
-        points=list(zip(xs,ys))
+        ydiff=y2-y1
+        xdiff=x2-x1
+        slope=(y2-y1)/(x2-x1)
+        n=int((abs(ydiff)+abs(xdiff))*0.8)-1
+        
+        points=[]
+        for i in range(n):
+            y=0 if slope==0 else ydiff*(i/n)
+            x=xdiff*(i/n) if slope==0 else y/slope
+            point=(int(round(x)+x1),int(round(y)+y1))
+            points.append(point)
+        points.append((p2[0],p2[1]))
+        
         points=[p+(z,) for p in points]
         return points
         
