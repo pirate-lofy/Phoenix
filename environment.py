@@ -57,9 +57,10 @@ class CarlaEnv(gym.Env):
 
     metadata = {'render.modes': ['human']}
     
-    def __init__(self,host='127.0.0.1', port=2000,timeout=20):
+    def __init__(self,env_id,host='127.0.0.1', port=2000,timeout=20):
         super(CarlaEnv,self).__init__()
     
+        self.env_id=env_id
         self.host=host
         self.port=port
         self.timeout=timeout
@@ -90,7 +91,7 @@ class CarlaEnv(gym.Env):
         settings.no_rendering_mode = False
         self.world.apply_settings(settings)
         self.map=self.world.get_map()
-        print(Fore.YELLOW+'CarlaEnv log: client connected'+Fore.WHITE)
+        print(Fore.YELLOW+'CarlaEnv log: env no. {0} client connected'.format(self.env_id)+Fore.WHITE)
         return self.world.get_blueprint_library()
     
     def _add_vehicle(self,blueprint):
@@ -397,7 +398,7 @@ class CarlaEnv(gym.Env):
             reward+= -100
         reward+=10 if self.checkpoint else 0.1
         if reward>0.1:
-            print(reward)
+            print('env no. {0} reward'.format(self.env_id),reward)
         return reward
 
 
@@ -409,7 +410,8 @@ class CarlaEnv(gym.Env):
     
     # ---------------------------------
     def reset(self):
-        print(Fore.YELLOW+'CarlaEnv log: reset for the {0} time'.format(self.reset_timer)+Fore.WHITE)
+        print(Fore.YELLOW+'CarlaEnv log: env no. {0} reset for the {1} time'.format(self.env_id,
+                      self.reset_timer)+Fore.WHITE)
         self._clear_history()
         self._initialize_position()
         self._init_stand()
@@ -421,7 +423,7 @@ class CarlaEnv(gym.Env):
 #        print(actions)
         steer=np.clip(actions[0],-1,1).astype(np.float32)
 #        throttle=np.clip(actions[1],0,1).astype(np.float32)
-        throttle=0.2
+        throttle=0.1
         
         steer=steer.item()
 #        throttle=throttle.item()

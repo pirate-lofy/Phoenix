@@ -30,7 +30,6 @@ class VecEnv(ABC):
 
     def __init__(self, num_envs, observation_space, measures_space, hl_command_space,action_space):
         self.num_envs = num_envs
-        print('*&^%%%%%%%%%^^^^^^^^&&&&&&&&',self.num_envs)
         self.observation_space = observation_space
         self.measures_space=measures_space
         self.hl_command_space=hl_command_space
@@ -339,7 +338,6 @@ class DummyVecEnv(VecEnv):
         self.buf_infos = [{} for _ in range(self.num_envs)]
         self.actions = None
         self.metadata = env.metadata
-        self.dead_command=env.dead_command
 
     def step_async(self, actions):
         self.actions = actions
@@ -351,7 +349,7 @@ class DummyVecEnv(VecEnv):
             
             if self.buf_dones[env_idx]:
                 # save final observation where user can get it, then reset
-                self.buf_infos[env_idx]['terminal_observation'] = obs
+                self.buf_infos[env_idx]['terminal_observation'] = (obs, measures, hl_command)
                 obs, measures, hl_command = self.envs[env_idx].reset()
             self._save_obs(env_idx, dict(zip(self.keys,[obs, measures, hl_command])))
         ret=self._obs_from_buf()
@@ -378,22 +376,6 @@ class DummyVecEnv(VecEnv):
     def get_images(self, *args, **kwargs) -> Sequence[np.ndarray]:
         return [env.render(*args, mode='rgb_array', **kwargs) for env in self.envs]
 
-    def render(self, *args, **kwargs):
-        """
-        Gym environment rendering. If there are multiple environments then
-        they are tiled together in one image via `BaseVecEnv.render()`.
-        Otherwise (if `self.num_envs == 1`), we pass the render call directly to the
-        underlying environment.
-
-        Therefore, some arguments such as `mode` will have values that are valid
-        only when `num_envs == 1`.
-
-        :param mode: The rendering type.
-        """
-        if self.num_envs == 1:
-            return self.envs[0].render(*args, **kwargs)
-        else:
-            return super().render(*args, **kwargs)
 
     def _save_obs(self, env_idx, obs):
         for key in self.keys:
@@ -425,53 +407,3 @@ class DummyVecEnv(VecEnv):
         indices = self._get_indices(indices)
         return [self.envs[i] for i in indices]
 
-
-
-def make_vec_env(env_id, n_envs=1, seed=None, start_index=0,
-                 monitor_dir=None, wrapper_class=None,
-                 env_kwargs=None, vec_env_cls=None, vec_env_kwargs=None):
-    """
-    Create a wrapped, monitored `VecEnv`.
-    By default it uses a `DummyVecEnv` which is usually faster
-    than a `SubprocVecEnv`.
-
-    :param env_id: (str or Type[gym.Env]) the environment ID or the environment class
-    :param n_envs: (int) the number of environments you wish to have in parallel
-    :param seed: (int) the initial seed for the random number generator
-    :param start_index: (int) start rank index
-    :param monitor_dir: (str) Path to a folder where the monitor files will be saved.
-        If None, no file will be written, however, the env will still be wrapped
-        in a Monitor wrapper to provide additional information about training.
-    :param wrapper_class: (gym.Wrapper or callable) Additional wrapper to use on the environment.
-        This can also be a function with single argument that wraps the environment in many things.
-    :param env_kwargs: (dict) Optional keyword argument to pass to the env constructor
-    :param vec_env_cls: (Type[VecEnv]) A custom `VecEnv` class constructor. Default: None.
-    :param vec_env_kwargs: (dict) Keyword arguments to pass to the `VecEnv` class constructor.
-    :return: (VecEnv) The wrapped environment
-    """
-    env_kwargs = {} if env_kwargs is None else env_kwargs
-    vec_env_kwargs = {} if vec_env_kwargs is None else vec_env_kwargs
-
-    def make_env(rank):
-        def _init():
-            if isinstance(env_id, str):
-                env = gym.make(env_id)
-                if len(env_kwargs) > 0:
-                    warnings.warn("No environment class was passed (only an env ID) so `env_kwargs` will be ignored")
-            else:
-                env = env_id(**env_kwargs)
-            if seed is not None:
-                env.seed(seed + rank)
-                env.action_space.seed(seed + rank)
-            # Wrap the env in a Monitor wrapper
-            # to have additional training information
-            monitor_path = os.path.join(monitor_dir, str(rank)) if monitor_dir is not None else None
-            # Create the monitor folder if needed
-            if monitor_path is not None:
-                os.makedirs(monitor_dir, exist_ok=True)
-            env = Monitor(env, filename=monitor_path)
-            # Optionally, wrap the environment with the provided wrapper
-            if wrapper_class is not None:
-                env = wrapper_class(env)
-            return env
-        return _init
