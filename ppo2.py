@@ -393,7 +393,7 @@ class PPO2(ActorCriticRLModel):
 
                 # save
                 if update%self.save_each==0:
-                    savepath='checkpoints\\'
+                    savepath='/home/colab/Desktop/checkpoints'
                     if not os.path.exists(savepath):
                         os.mkdir(savepath)
                     filepath = savepath+'/'+str(update)
