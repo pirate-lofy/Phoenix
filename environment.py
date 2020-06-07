@@ -73,8 +73,7 @@ class CarlaEnv(gym.Env):
         self.observation_space=spaces.Box(0, 255, self.callibarationRGB_shape)
         self.measures_space=spaces.Box(-np.inf,np.inf, self.measures_shape)
         self.hl_command_space=spaces.Box(0, 1, self.hl_command_shape)
-        self.action_space = spaces.Box(-1, 1, shape=(
-                self.n_actions,))
+        self.action_space = spaces.Box(-1, 1, shape=(self.n_actions,))
         
         self.blueprint=self._connect()
         self.vehicle=self._add_vehicle(self.blueprint)
@@ -154,9 +153,9 @@ class CarlaEnv(gym.Env):
         img_gray=cv.resize(img_gray,(192,182),cv.INTER_AREA)/255.
         self.rgb_data=img_gray.copy()
         
-#        if self.SHOW_VIEW:
-#            cv.imshow('front view',img)
-#            cv.waitKey(1)
+        if self.SHOW_VIEW:
+            cv.imshow('front view',img)
+            cv.waitKey(1)
         
     def _prepare_seg(self,img):
 #        res=np.zeros(img.shape)
@@ -203,7 +202,6 @@ class CarlaEnv(gym.Env):
 
 
     def get_waypoints(self,route):
-        self.visited=[False]*len(route)
         waypoints=[]
         for i in route:
             point=self.gp._graph.nodes[i]['vertex']
@@ -211,7 +209,54 @@ class CarlaEnv(gym.Env):
             point=self.gpDAO.get_waypoint(point)
             waypoints.append(point)
         return waypoints
+
+    def _sign(self,x1,x2):
+        if x1>x2:
+            xmax=x1
+            xmin=x2
+        elif x2>x1:
+            xmax=x2
+            xmin=x1
+        else:
+            xmax=xmin=x1
+        return xmax,xmin
+    
+    def _get_between(self,p1,p2):
+        z=p1[2]
+        x1,x2=p1[0],p2[0]
+        y1,y2=p1[1],p2[1]
+        xmax,xmin=self._sign(x1,x2)
+        lenx=xmax-xmin
+        xs=[xmin]
+        for i in range(1,int(lenx)+1):
+            xs.append(xmin+i)
+
+        ymax,ymin=self._sign(y1,y2)
+        leny=ymax-ymin
+        ys=[ymin]
+        for i in range(1,int(leny)+1):
+            ys.append(ymin+i)
+            
+        points=list(zip(xs,ys))
+        points=[p+(z,) for p in points]
+        return points
         
+    def _get_new_waypoints(self,route):
+        new_points=[]
+        for i in range(len(route)-1):
+            i1=route[i]
+            i2=route[i+1]
+            point1=self.gp._graph.nodes[i1]['vertex']
+            point2=self.gp._graph.nodes[i2]['vertex']
+            points=self._get_between(point1,point2)
+            
+            for point in points:
+                point=carla.Location(*point)
+                point=self.gpDAO.get_waypoint(point)
+                new_points.append(point)
+                
+        return new_points
+    
     def _initialize_position(self):
         self.vehicle.apply_control(carla.VehicleControl(brake=0.0, throttle=0.0))
         transform = random.choice(self.map.get_spawn_points())
@@ -228,7 +273,7 @@ class CarlaEnv(gym.Env):
         
         self.route=self.gp._path_search(self.start_loc,self.goal_loc)
         self.waypoints=self.get_waypoints(self.route)
-#        self.draw_path(self.waypoints)
+        self.new_points=self._get_new_waypoints(self.route)
         self.c=0
         
     
@@ -382,6 +427,7 @@ class CarlaEnv(gym.Env):
         return data,measures,hl_command
     
     def step(self,actions,dead=False):
+        print(actions)
         steer=np.clip(actions[0],-1,1).astype(np.float32)
 #        throttle=np.clip(actions[1],0,1).astype(np.float32)
         throttle=0.2
