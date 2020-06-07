@@ -14,7 +14,7 @@ try:
         set_global_seeds(seed)
         return _init
     
-    env = DummyVecEnv([make_env(i) for i in range(100)])
+    env = DummyVecEnv([make_env(i) for i in range(16)])
     model=PPO2(CustomPolicy,env,save_each=10)
     model.learn(100000)
 except Exception:
