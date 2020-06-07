@@ -153,9 +153,9 @@ class CarlaEnv(gym.Env):
         img_gray=cv.resize(img_gray,(192,182),cv.INTER_AREA)/255.
         self.rgb_data=img_gray.copy()
         
-        if self.SHOW_VIEW:
-            cv.imshow('front view',img)
-            cv.waitKey(1)
+#        if self.SHOW_VIEW:
+#            cv.imshow('front view',img)
+#            cv.waitKey(1)
         
     def _prepare_seg(self,img):
 #        res=np.zeros(img.shape)
@@ -272,8 +272,8 @@ class CarlaEnv(gym.Env):
         self.dist_from_start_to_end=np.linalg.norm(sp-gp)
         
         self.route=self.gp._path_search(self.start_loc,self.goal_loc)
-        self.waypoints=self.get_waypoints(self.route)
-        self.new_points=self._get_new_waypoints(self.route)
+        self.waypoints=self._get_new_waypoints(self.route)
+        self.visited=[False]*len(self.waypoints)
         self.c=0
         
     
@@ -322,6 +322,8 @@ class CarlaEnv(gym.Env):
         colls=0
         for col in self.collision_data:
             colls+=self._get_vector_value(col.normal_impulse)
+        
+#        self.draw_path(self.waypoints)
         return np.array([speed,acc,colls,invasion])
     
     
@@ -427,7 +429,7 @@ class CarlaEnv(gym.Env):
         return data,measures,hl_command
     
     def step(self,actions,dead=False):
-        print(actions)
+#        print(actions)
         steer=np.clip(actions[0],-1,1).astype(np.float32)
 #        throttle=np.clip(actions[1],0,1).astype(np.float32)
         throttle=0.2
