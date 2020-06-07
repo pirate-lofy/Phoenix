@@ -54,6 +54,7 @@ class CarlaEnv(gym.Env):
     checkpoint=None
     dist_to_goal=None
     visited=None
+    episode_limit=50
 
     metadata = {'render.modes': ['human']}
     
@@ -200,6 +201,7 @@ class CarlaEnv(gym.Env):
         self.is_goal=False
         self.bad_pos=False
         self.reset_timer+=1
+        self.timer=time.time()
 
 
     def get_waypoints(self,route):
@@ -408,6 +410,13 @@ class CarlaEnv(gym.Env):
         return self.is_goal or self.bad_pos
 
     
+    def _time_out(self):
+        if time.time()>=self.episode_limit+self.timer:
+            print(Fore.YELLOW+'CarlaEnv log: env no. {0} exeeded episode limit'.format(self.env_id)+Fore.WHITE)
+            return True
+        return False
+    
+    
     # ---------------------------------
     def reset(self):
         print(Fore.YELLOW+'CarlaEnv log: env no. {0} reset for the {1} time'.format(self.env_id,
@@ -434,7 +443,7 @@ class CarlaEnv(gym.Env):
         self.vehicle.apply_control(control)
         data,measures,hl_command=self._get_data()
         reward=self._compute_reward(measures)
-        done=self._is_done()
+        done=self._is_done()|self._time_out()
         return data,measures,hl_command,reward,done,{}
     
     def dead_command(self):
