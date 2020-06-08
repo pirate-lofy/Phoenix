@@ -18,7 +18,7 @@ try:
     model=PPO2(CustomPolicy,env,save_each=10)
     x=
     model.load('/home/colab/Desktop/checkpoints/{0}'.format(x))
-    model.learn(10000000)
+    model.learn(10000000,step=x)
 except Exception:
     env.close()
     logging.exception("An exception was thrown!")

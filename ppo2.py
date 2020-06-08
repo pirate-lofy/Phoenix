@@ -326,7 +326,7 @@ class PPO2(ActorCriticRLModel):
         return policy_loss, value_loss, policy_entropy, approxkl, clipfrac
 
     def learn(self, total_timesteps, callback=None, log_interval=1, tb_log_name="PPO2",
-              reset_num_timesteps=True,step=1):
+              reset_num_timesteps=True,step=0):
         # Transform to callable if needed
         self.learning_rate = get_schedule_fn(self.learning_rate)
         self.cliprange = get_schedule_fn(self.cliprange)
@@ -344,7 +344,7 @@ class PPO2(ActorCriticRLModel):
 
             callback.on_training_start(locals(), globals())
 
-            for update in range(step, n_updates + 1):
+            for update in range(step+1, n_updates + 1):
                 assert self.n_batch % self.nminibatches == 0, ("The number of minibatches (`nminibatches`) "
                                                                "is not a factor of the total number of samples "
                                                                "collected per rollout (`n_batch`), "
