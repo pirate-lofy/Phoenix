@@ -1,25 +1,25 @@
 from ppo2 import PPO2
 from environment import CarlaEnv
-from vec_wrappers import make_vec_env
 from policy import CustomPolicy
 import logging
-from stable_baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from stable_baselines.common.vec_env.vec_normalize import VecNormalize
+from vec_wrappers import DummyVecEnv
+from stable_baselines.common import set_global_seeds
 
 try:
-#    def make_env():
-#        def make_it():
-#            return CarlaEnv()
-#        return make_it
-#    env = DummyVecEnv([make_env() for _ in range(1)])
-#    env = VecNormalize(env)
-    env=CarlaEnv()
-#    env = make_vec_env(lambda: env, n_envs=1)
+    def make_env(rank, seed=0):
+        def _init():
+            env = CarlaEnv(rank)
+            env.seed(seed + rank)
+            return env
+        set_global_seeds(seed)
+        return _init
+    
+    env = DummyVecEnv([make_env(i) for i in range(8)])
     model=PPO2(CustomPolicy,env,save_each=10)
     x=
     model.load('/home/colab/Desktop/checkpoints/{0}'.format(x))
-    model.learn(10000000,step=x)
-
+    model.learn(10000000)
 except Exception:
     env.close()
     logging.exception("An exception was thrown!")
+

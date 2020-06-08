@@ -432,7 +432,7 @@ class CarlaEnv(gym.Env):
 #        print(actions)
         steer=np.clip(actions[0],-1,1).astype(np.float32)
 #        throttle=np.clip(actions[1],0,1).astype(np.float32)
-        throttle=0.1
+        throttle=0.3
         
         steer=steer.item()
 #        throttle=throttle.item()
