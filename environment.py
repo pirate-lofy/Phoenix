@@ -4,17 +4,17 @@ from gym import spaces
 import numpy as np
 import random
 import time
-from math import exp,sqrt
+from math import sqrt
 from colorama import Fore
 
-##linux
+#linux
 try:
     sys.path.append("carla-0.9.5-py3.5-linux-x86_64.egg")
 except IndexError:
     print(Fore.YELLOW+'CarlaEnv log: cant append carla #egg'+Fore.WHITE)
 
 #
-# windows
+## windows
 #try:
 #    sys.path.append("carla-0.9.5-py3.7-win-amd64.egg")
 #except IndexError:
@@ -46,6 +46,7 @@ class CarlaEnv(gym.Env):
     SHOW_VIEW=True
     is_goal=None
     bad_pos=None
+    off_road=None
     reset_timer=0
     wait=300
     c=0
@@ -155,9 +156,9 @@ class CarlaEnv(gym.Env):
         img_gray=cv.resize(img_gray,(192,182),cv.INTER_AREA)/255.
         self.rgb_data=img_gray.copy()
         
-#        if self.SHOW_VIEW:
-#            cv.imshow('front view',img)
-#            cv.waitKey(1)
+        if self.SHOW_VIEW:
+            cv.imshow('front view',img)
+            cv.waitKey(1)
         
     def _prepare_seg(self,img):
 #        res=np.zeros(img.shape)
@@ -200,6 +201,7 @@ class CarlaEnv(gym.Env):
         self.invasion_data=[]
         self.is_goal=False
         self.bad_pos=False
+        self.off_road=False
         self.reset_timer+=1
         self.timer=time.time()
 
@@ -310,6 +312,10 @@ class CarlaEnv(gym.Env):
         dif=self._compute_dif_between_positions(loc)
         self._update_stand(dif)
         
+        ret=self.map.get_waypoint(loc, project_to_road=False)
+        if ret is None:
+            self.off_road=True
+        
         invasion=len(self.invasion_data)
         colls=0
         for col in self.collision_data:
@@ -407,7 +413,7 @@ class CarlaEnv(gym.Env):
     def _is_done(self):
 #        print('goal= ',self.is_goal,' bad= ',self.bad_pos)
 #        print(self.is_goal,self.bad_pos)
-        return self.is_goal or self.bad_pos
+        return self.is_goal or self.bad_pos or self.off_road
 
     
     def _time_out(self):
