@@ -348,7 +348,7 @@ class CarlaEnv(gym.Env):
 
     
     def _bad_pos(self,colls,invasion):
-        if self._is_positive(colls) or self._is_positive(invasion) or self._is_quiet():
+        if self._is_positive(colls) or self._is_positive(invasion) or self._is_quiet() or self.off_road:
             return True
         return False
 
