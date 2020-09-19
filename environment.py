@@ -405,8 +405,8 @@ class CarlaEnv(gym.Env):
             self.bad_pos=True
             reward+= -100
         reward+=10 if self.checkpoint else 0.1
-        if reward>0.1:
-            print('env no. {0} reward'.format(self.env_id),reward)
+#        if reward>0.1:
+#            print('env no. {0} reward'.format(self.env_id),reward)
         return reward
 
 
