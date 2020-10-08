@@ -372,6 +372,10 @@ class DummyVecEnv(VecEnv):
     def close(self):
         for env in self.envs:
             env.close()
+            
+    def dead_command(self):
+        for env_idx in range(self.num_envs):
+            self.envs[env_idx].dead_command()
 
     def get_images(self, *args, **kwargs) -> Sequence[np.ndarray]:
         return [env.render(*args, mode='rgb_array', **kwargs) for env in self.envs]
