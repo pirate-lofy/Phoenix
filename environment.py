@@ -57,6 +57,9 @@ class CarlaEnv(gym.Env):
     visited=None
     episode_limit=50
 
+    prev_steer=0
+
+
     metadata = {'render.modes': ['human']}
     
     def __init__(self,env_id,host='127.0.0.1', port=2000,timeout=20):
@@ -156,9 +159,9 @@ class CarlaEnv(gym.Env):
         img_gray=cv.resize(img_gray,(192,182),cv.INTER_AREA)/255.
         self.rgb_data=img_gray.copy()
         
-        if self.SHOW_VIEW:
-            cv.imshow('front view',img)
-            cv.waitKey(1)
+#        if self.SHOW_VIEW:
+#            cv.imshow('front view',img)
+#            cv.waitKey(1)
         
     def _prepare_seg(self,img):
 #        res=np.zeros(img.shape)
@@ -405,8 +408,8 @@ class CarlaEnv(gym.Env):
             self.bad_pos=True
             reward+= -100
         reward+=10 if self.checkpoint else 0.1
-        if reward>0.1:
-            print('env no. {0} reward'.format(self.env_id),reward)
+#        if reward>0.1:
+#            print('env no. {0} reward'.format(self.env_id),reward)
         return reward
 
 
@@ -453,9 +456,13 @@ class CarlaEnv(gym.Env):
         return steer
     
     def step(self,actions,dead=False):
+#        print(actions)
         steer=self.prepare_steer(actions[0])
         
         throttle=0.3
+        
+#        steer=steer.item()
+#        throttle=throttle.item()
         if not dead:
             control=carla.VehicleControl(throttle,steer,0)
         else:
@@ -465,7 +472,6 @@ class CarlaEnv(gym.Env):
         reward=self._compute_reward(measures)
         done=self._is_done()|self._time_out()
         return data,measures,hl_command,reward,done,{}
-    
     
     def dead_command(self):
         self.step([0.,0.,0.],True)
