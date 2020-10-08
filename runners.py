@@ -124,6 +124,10 @@ class Runner(AbstractEnvRunner):
                     return [None] * 9
 
             mb_rewards.append(rewards)
+        
+        # dead command to force the car to stop
+        self.env.dead_command()
+        
         # batch of steps to batch of rollouts
         mb_obs = np.asarray(mb_obs, dtype=self.obs.dtype)
         mb_measures = np.asarray(mb_measures, dtype=self.measures.dtype)
